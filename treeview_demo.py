@@ -32,6 +32,14 @@ def dump(data, indent=None):
     print('-------------------------------------------------------------------------------------------------------')
 
 
+def filter_dict_only(data):
+    _data = {}
+    for k, v in data.items():
+        if isinstance(v, dict):
+            _data[k] = v
+    return _data
+
+
 class Treeview(ttk.Treeview):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -78,8 +86,9 @@ class Treeview(ttk.Treeview):
 
     def tag_replace(self, old, new, item=None):
         for item in (item,) if item else self.tag_has(old):
-            self.tags_update('add', new, item)
-            self.tags_update('remove', old, item)
+            if self.tag_has(old, item):
+                self.tags_update('add', new, item)
+                self.tags_update('remove', old, item)
 
     def tags_reset(self, excluded=None):
         def reset(_item):
@@ -153,18 +162,7 @@ class Treeview(ttk.Treeview):
                 self.tags_reset()
             return
 
-        if event.state & 1 << 2:
-            if self.tag_has('odd', item):
-                self.tag_add('selected', item)
-                self.tag_replace('odd', 'selected_odd', item)
-            elif self.tag_has('even', item):
-                self.tag_add('selected', item)
-                self.tag_replace('even', 'selected_even', item)
-            elif self.tag_has('selected_odd', item):
-                self.tag_replace('selected_odd', 'odd', item)
-            elif self.tag_has('selected_even', item):
-                self.tag_replace('selected_even', 'even', item)
-        else:
+        if not event.state & 1 << 2:
             self.tags_reset()
             self.tag_add('selected', item)
             if self.tag_has('odd', item):
@@ -175,15 +173,15 @@ class Treeview(ttk.Treeview):
     def button_release(self, _):
         self.select_window.withdraw()
         self.unbind('<Motion>')
-
-        for item in self.tag_has('selected'):
+        for item in self.selected_items:
             if self.tag_has('odd', item) or self.tag_has('even', item):
+                print('--------------------------------------')
                 self.tag_remove(('selected', '_selected'), item)
             else:
                 self.tag_replace('_selected', 'selected', item)
 
-    def selected_get(self):
-        return sorted(self.tag_has('selected_odd') + self.tag_has('selected_even'))
+    def selected_get(self, tag='selected'):
+        return sorted(self.tag_has(f'{tag}_odd') + self.tag_has(f'{tag}_even'))
 
     def selected_set(self, event):
         def selected_items():
@@ -331,15 +329,23 @@ class Treeview(ttk.Treeview):
         for item in items:
             get_data(item, data)
 
-        # dump(data)
-
         for item in self.tag_has('copy_odd'):
             self.tag_replace('copy_odd', 'odd', item)
         for item in self.tag_has('copy_even'):
             self.tag_replace('copy_even', 'even', item)
 
+        selected = self.selected_get('cut')
+        if selected:
+            parent = self.parent(selected[0])
+            for item in sorted(selected, reverse=True):
+                self.delete(item)
+            self.reindex(parent)
+            self.selected_items = {}
+
         def walk(_parent, _item, _data):
             iid = self.append(_parent, **_data)
+
+            self.tag_remove(('cut_odd', 'cut_even'), iid)
             if not iid:
                 return
 
@@ -353,7 +359,7 @@ class Treeview(ttk.Treeview):
                     continue
                 walk(iid, key, value)
 
-        for item, data in data.items():
+        for item, _data in data.items():
             if self.active_item.startswith(item):
                 if self.tag_has('selected_odd'):
                     self.tag_replace('selected_odd', 'odd')
@@ -363,28 +369,18 @@ class Treeview(ttk.Treeview):
                 if self.tag_has('cut_odd', item) or self.tag_has('cut_even', item):
                     return
 
-            walk(self.active_item, item, data)
-
-        was_cut = False
-        parent = self.parent(items[0])
-        for item in items:
-            if self.tag_has('cut_odd', item) or self.tag_has('cut_even', item):
-                self.delete(item)
-                was_cut = True
-        if was_cut and parent:
-            self.reindex(parent)
+            walk(self.active_item, item, _data)
 
         self.tags_reset('selected')
 
     def remove(self):
-        parent = None
-        for item in self.selected_get():
-            parent = self.parent(item)
+        parent = ''
+        for item in sorted(self.selected_get(), reverse=True):
+            _parent = self.parent(item)
             self.delete(item)
-
-        if parent:
-            self.reindex(parent)
-
+            if parent != _parent:
+                parent = _parent
+                self.reindex(parent)
         self.tags_reset()
 
     def insert(self, parent='', index=tk.END, **kwargs):
@@ -465,17 +461,38 @@ class Treeview(ttk.Treeview):
 
         return data
 
-    def reindex(self, parent):
+    def get(self, iid=''):
+        def get_data(_item, _data):
+            _data[_item] = self.item(_item)
+            for node in self.get_children(_item):
+                get_data(node, _data[_item])
+
         data = {}
+        get_data(iid, data)
+        return data
+
+    def reindex(self, parent):
+        data = self.get(parent)
+        data = filter_dict_only(data[parent])
+
         for item in self.get_children(parent):
-            data[item] = self.item(item)
             self.delete(item)
 
-        for idx, (item, value) in enumerate(data.items()):
-            if value['values'][0] == self.active_item:
-                self.active_item = f'{parent}_{idx}'
-            value['values'][0] = f'{parent}_{idx}'
-            self.append(parent, **value)
+        def walk(_parent, _data):
+            iid = self.append(_parent, **_data)
+            values = list(_data['values'])
+            values[0] = iid
+            self.item(iid, values=values)
+
+            for _k, _value in _data.items():
+                if not isinstance(_value, dict):
+                    continue
+                walk(iid, _value)
+
+        for k, value in data.items():
+            if not isinstance(value, dict):
+                continue
+            walk(parent, value)
 
     def popup_menu(self, event):
         item = self.active_item = self.identify('item', event.x, event.y)
@@ -516,7 +533,6 @@ class App(tk.Tk):
         tv.tag_configure('selected_even', background='#25a625')
 
         self.title('Treeview Demo')
-        self.geometry('475x650+1200+50')
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=1)
@@ -524,11 +540,23 @@ class App(tk.Tk):
 
         tv.grid(sticky='NSEW', columnspan=990)
 
+        self.app_data = {}
         self.init()
 
     def init(self):
         tv = self.treeview
         self.protocol('WM_DELETE_WINDOW', self.exit)
+
+        file = path.join(ABS_PATH, 'app.json')
+        if path.exists(file):
+            with open(file) as f:
+                self.app_data = json.load(f)
+        else:
+            self.app_data = {
+                'geometry': self.geometry(),
+            }
+
+        self.geometry(self.app_data.get('geometry', ''))
 
         file = path.join(ABS_PATH, 'treeview.json')
         if path.exists(file):
@@ -556,10 +584,12 @@ class App(tk.Tk):
                 tv.tags_reset()
 
     def exit(self):
-        self.save_treeview(path.join(ABS_PATH, 'treeview.json'))
+        self.app_data.update({'geometry': self.geometry()})
+        self.save()
         self.destroy()
 
-    def save_treeview(self, file=None):
+    def save(self):
+        file = path.join(ABS_PATH, 'treeview.json')
         if file:
             dirname = path.dirname(file)
             if not path.exists(dirname):
@@ -567,6 +597,15 @@ class App(tk.Tk):
 
             with open(file, 'w') as f:
                 json.dump(self.treeview.serialize(), f, indent=3)
+
+        file = path.join(ABS_PATH, 'app.json')
+        if file:
+            dirname = path.dirname(file)
+            if not path.exists(dirname):
+                makedirs(dirname)
+
+            with open(file, 'w') as f:
+                json.dump(self.app_data, f, indent=3)
 
 
 def main():
