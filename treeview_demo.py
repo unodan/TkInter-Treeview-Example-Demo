@@ -81,8 +81,6 @@ class Treeview(ttk.Treeview):
         self.selected_items = []
         self.origin_x = \
             self.origin_y = \
-            self.popup_x = \
-            self.popup_y = \
             self.active_item = \
             self.origin_item = None
 
@@ -442,7 +440,7 @@ class Treeview(ttk.Treeview):
 
         for item in sorted(items, reverse=True):
             _parent = self.parent(item)
-            if self.active_item.startswith(item):
+            if self.active_item.startswith(item) and self.selected_get('cut'):
                 continue
             self.delete(item)
             if parent != _parent:
