@@ -40,6 +40,39 @@ def filter_dict_only(data):
     return _data
 
 
+class Dialog(tk.Toplevel):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.var = tk.StringVar()
+
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
+        self.title('Rename')
+        self.container = ttk.Frame(self)
+        self.container.rowconfigure(1, weight=1)
+        self.container.columnconfigure(0, weight=1)
+        self.container.grid(sticky=tk.NSEW)
+
+        frame = self.row0 = ttk.Frame(self.container)
+        frame.columnconfigure(1, weight=1)
+        self.label = ttk.Label(frame, text="Name")
+        self.label.grid(sticky=tk.NSEW, row=0, column=0)
+        self.entry = ttk.Entry(frame, width=30)
+        self.entry.config(textvariable=self.var)
+        self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
+
+        frame = self.row1 = ttk.Frame(self.container)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        self.button_ok = ttk.Button(frame, text="Ok")
+        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
+        self.button_cancel = ttk.Button(frame, text="Cancel")
+        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+
+
 class Treeview(ttk.Treeview):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -48,6 +81,8 @@ class Treeview(ttk.Treeview):
         self.selected_items = []
         self.origin_x = \
             self.origin_y = \
+            self.popup_x = \
+            self.popup_y = \
             self.active_item = \
             self.origin_item = None
 
@@ -70,6 +105,8 @@ class Treeview(ttk.Treeview):
         popup.add_command(label="Paste", command=self.paste)
         popup.add_separator()
         popup.add_command(label="Delete", command=self.remove)
+        popup.add_separator()
+        popup.add_command(label="Rename", command=self.rename)
 
         self.bindings_set()
 
@@ -111,7 +148,12 @@ class Treeview(ttk.Treeview):
 
         exclude = []
         if excluded and not isinstance(excluded, tk.Event):
-            exclude.append(excluded)
+            if isinstance(excluded, str):
+                excluded = (excluded,)
+
+            for item in excluded:
+                if item in excluded:
+                    exclude.append(item)
 
         tag = 'odd'
         for item in self.get_children():
@@ -175,7 +217,6 @@ class Treeview(ttk.Treeview):
         self.unbind('<Motion>')
         for item in self.selected_items:
             if self.tag_has('odd', item) or self.tag_has('even', item):
-                print('--------------------------------------')
                 self.tag_remove(('selected', '_selected'), item)
             else:
                 self.tag_replace('_selected', 'selected', item)
@@ -302,12 +343,30 @@ class Treeview(ttk.Treeview):
         self.tag_replace('selected_odd', 'copy_odd')
         self.tag_replace('selected_even', 'copy_even')
 
-    def paste(self):
-        def get_data(_item, _data):
-            _data[_item] = self.item(_item)
-            for node in self.get_children(_item):
-                get_data(node, _data[_item])
+    def rename(self):
+        def ok():
+            text = dlg.entry.get().strip(' ')
+            if text:
+                self.item(item, text=text)
+            dlg.destroy()
 
+        def cancel():
+            dlg.destroy()
+
+        root = self.winfo_toplevel()
+        for item in self.selected_get():
+            dlg = Dialog(root)
+            dlg.button_ok.config(command=ok)
+            dlg.button_cancel.config(command=cancel)
+            dlg.var.set(self.item(item, 'text'))
+            dlg.entry.focus_set()
+            dlg.entry.selection_range(0, tk.END)
+            dlg.update_idletasks()
+            if hasattr(self.popup, 'x') and hasattr(self.popup, 'y'):
+                dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{self.popup.x}+{self.popup.y}')
+            root.wait_window(self)
+
+    def paste(self):
         selected = list(self.tag_has('selected'))
         for item in selected.copy():
             tags = self.item(item, 'tags')
@@ -327,61 +386,72 @@ class Treeview(ttk.Treeview):
 
         data = {}
         for item in items:
-            get_data(item, data)
+            data.update(self.get(item))
 
         for item in self.tag_has('copy_odd'):
             self.tag_replace('copy_odd', 'odd', item)
         for item in self.tag_has('copy_even'):
             self.tag_replace('copy_even', 'even', item)
 
-        selected = self.selected_get('cut')
-        if selected:
-            parent = self.parent(selected[0])
-            for item in sorted(selected, reverse=True):
-                self.delete(item)
-            self.reindex(parent)
-            self.selected_items = {}
-
-        def walk(_parent, _item, _data):
+        def walk(_parent, _data):
             iid = self.append(_parent, **_data)
-
-            self.tag_remove(('cut_odd', 'cut_even'), iid)
             if not iid:
                 return
+
+            self.tag_remove(('cut_odd', 'cut_even'), iid)
 
             self.tag_remove('selected', iid)
             values = list(self.item(iid, 'values'))
             values[0] = iid
             self.item(iid, values=values)
 
-            for key, value in _data.items():
+            for value in _data.values():
                 if not isinstance(value, dict):
                     continue
-                walk(iid, key, value)
+                walk(iid, value)
 
         for item, _data in data.items():
+            if self.active_item.startswith(item):
+                continue
+
             if self.active_item.startswith(item):
                 if self.tag_has('selected_odd'):
                     self.tag_replace('selected_odd', 'odd')
                 elif self.tag_has('selected_even'):
                     self.tag_replace('selected_even', 'even')
 
-                if self.tag_has('cut_odd', item) or self.tag_has('cut_even', item):
-                    return
+            walk(self.active_item, _data)
 
-            walk(self.active_item, item, _data)
+        if self.selected_get('cut'):
+            self.remove('cut')
+            self.selected_items = {}
 
         self.tags_reset('selected')
 
-    def remove(self):
+    def remove(self, tag='selected'):
         parent = ''
-        for item in sorted(self.selected_get(), reverse=True):
+
+        items = self.selected_get(tag)
+        if items:
+            root = items[0]
+            for item in items.copy():
+                if item != root and item.startswith(root):
+                    items.pop(items.index(item))
+                else:
+                    root = item
+
+        for item in sorted(items, reverse=True):
             _parent = self.parent(item)
+            if self.active_item.startswith(item):
+                continue
             self.delete(item)
             if parent != _parent:
                 parent = _parent
                 self.reindex(parent)
+
+        self.selected_items = {}
         self.tags_reset()
+        self.reindex('')
 
     def insert(self, parent='', index=tk.END, **kwargs):
         def get_iid(_parent=''):
@@ -495,9 +565,18 @@ class Treeview(ttk.Treeview):
             walk(parent, value)
 
     def popup_menu(self, event):
+        self.popup.x, self.popup.y = event.x_root, event.y_root
         item = self.active_item = self.identify('item', event.x, event.y)
         self.focus(item)
         self.focus_set()
+        if self.selected_get():
+            for _item in self.selected_get():
+                if self.selected_get('copy') or self.selected_get('cut'):
+                    if self.tag_has('selected_odd', _item):
+                        self.tag_replace('selected_odd', 'odd', _item)
+                    elif self.tag_has('selected_even', _item):
+                        self.tag_replace('selected_even', 'even', _item)
+
         if self.tag_has('odd', item):
             self.tag_add('selected', item)
             self.tag_replace('odd', 'selected_odd', item)
@@ -513,8 +592,9 @@ class App(tk.Tk):
         super().__init__()
 
         self.style = ttk.Style()
-        tv = self.treeview = Treeview(self)
+        self.style.theme_use('clam')
 
+        tv = self.treeview = Treeview(self)
         tv.heading('#0', text='Name')
         tv["columns"] = ("iid",)
         tv.column("iid", width=150, minwidth=150, stretch=tk.YES)
@@ -531,6 +611,8 @@ class App(tk.Tk):
 
         tv.tag_configure('selected_odd', background='#b0eab2')
         tv.tag_configure('selected_even', background='#25a625')
+
+        self.style.configure('TEntry', padding=(3, 2))
 
         self.title('Treeview Demo')
         self.rowconfigure(0, weight=1)
