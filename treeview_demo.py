@@ -40,10 +40,9 @@ def filter_dict_only(data):
     return _data
 
 
-class Dialog(tk.Toplevel):
+class RenameDialog(tk.Toplevel):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
-        self.var = tk.StringVar()
 
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
@@ -58,8 +57,8 @@ class Dialog(tk.Toplevel):
         frame.columnconfigure(1, weight=1)
         self.label = ttk.Label(frame, text="Name")
         self.label.grid(sticky=tk.NSEW, row=0, column=0)
-        self.entry = ttk.Entry(frame, width=30)
-        self.entry.config(textvariable=self.var)
+        self.entry = Entry(frame, width=30)
+        self.entry.config(textvariable=self.entry.var)
         self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
         frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
 
@@ -71,6 +70,76 @@ class Dialog(tk.Toplevel):
         self.button_cancel = ttk.Button(frame, text="Cancel")
         self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
         frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+
+
+class AddLeafDialog(tk.Toplevel):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
+        self.title('Add Item')
+        self.container = ttk.Frame(self)
+        self.container.rowconfigure(1, weight=1)
+        self.container.columnconfigure(0, weight=1)
+        self.container.grid(sticky=tk.NSEW)
+
+        frame = self.row0 = ttk.Frame(self.container)
+        frame.columnconfigure(1, weight=1)
+        self.label = ttk.Label(frame, text="Name")
+        self.label.grid(sticky=tk.NSEW, row=0, column=0)
+        self.entry = Entry(frame, width=30)
+        self.entry.config(textvariable=self.entry.var)
+        self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
+
+        frame = self.row1 = ttk.Frame(self.container)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        self.button_ok = ttk.Button(frame, text="Ok")
+        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
+        self.button_cancel = ttk.Button(frame, text="Cancel")
+        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+
+
+class AddNodeDialog(tk.Toplevel):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
+        self.title('Add Folder')
+        self.container = ttk.Frame(self)
+        self.container.rowconfigure(1, weight=1)
+        self.container.columnconfigure(0, weight=1)
+        self.container.grid(sticky=tk.NSEW)
+
+        frame = self.row0 = ttk.Frame(self.container)
+        frame.columnconfigure(1, weight=1)
+        self.label = ttk.Label(frame, text="Name")
+        self.label.grid(sticky=tk.NSEW, row=0, column=0)
+        self.entry = Entry(frame, width=30)
+        self.entry.config(textvariable=self.entry.var)
+        self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
+
+        frame = self.row1 = ttk.Frame(self.container)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        self.button_ok = ttk.Button(frame, text="Ok")
+        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
+        self.button_cancel = ttk.Button(frame, text="Cancel")
+        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+
+
+class Entry(ttk.Entry):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.var = tk.StringVar()
 
 
 class Treeview(ttk.Treeview):
@@ -98,6 +167,10 @@ class Treeview(ttk.Treeview):
         self.linespace = self.font.metrics('linespace') + 5
 
         popup = self.popup = tk.Menu(self.root, tearoff=0)
+        create_new = tk.Menu(popup, tearoff=0)
+
+        popup.add_cascade(label="Create New", menu=create_new)
+        popup.add_separator()
         popup.add_command(label="Cut", command=self.cut)
         popup.add_command(label="Copy", command=self.copy)
         popup.add_command(label="Paste", command=self.paste)
@@ -105,6 +178,10 @@ class Treeview(ttk.Treeview):
         popup.add_command(label="Delete", command=self.remove)
         popup.add_separator()
         popup.add_command(label="Rename", command=self.rename)
+
+        create_new.add_command(label="Item", command=self.add_leaf)
+        create_new.add_separator()
+        create_new.add_command(label="Folder", command=self.add_node)
 
         self.bindings_set()
 
@@ -353,15 +430,19 @@ class Treeview(ttk.Treeview):
 
         root = self.winfo_toplevel()
         for item in self.selected_get():
-            dlg = Dialog(root)
+            dlg = RenameDialog(root)
+
             dlg.button_ok.config(command=ok)
             dlg.button_cancel.config(command=cancel)
-            dlg.var.set(self.item(item, 'text'))
+
+            dlg.entry.var.set(self.item(item, 'text'))
             dlg.entry.focus_set()
             dlg.entry.selection_range(0, tk.END)
             dlg.update_idletasks()
+
             if hasattr(self.popup, 'x') and hasattr(self.popup, 'y'):
                 dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{self.popup.x}+{self.popup.y}')
+
             root.wait_window(self)
 
     def paste(self):
@@ -399,9 +480,7 @@ class Treeview(ttk.Treeview):
             self.tag_remove(('cut_odd', 'cut_even'), iid)
 
             self.tag_remove('selected', iid)
-            values = list(self.item(iid, 'values'))
-            values[0] = iid
-            self.item(iid, values=values)
+            self.update_value(0, iid, iid)
 
             for value in _data.values():
                 if not isinstance(value, dict):
@@ -425,6 +504,61 @@ class Treeview(ttk.Treeview):
             self.selected_items = {}
 
         self.tags_reset('selected')
+
+    def add_leaf(self):
+        def ok():
+            text = dlg.entry.get().strip(' ')
+            if text:
+                iid = self.append(self.active_item, text=text, values=['Item', 'new'])
+                self.update_value(1, iid, iid)
+                self.tags_reset()
+            dlg.destroy()
+
+        def cancel():
+            dlg.destroy()
+
+        root = self.winfo_toplevel()
+        dlg = AddLeafDialog(root)
+
+        dlg.button_ok.config(command=ok)
+        dlg.button_cancel.config(command=cancel)
+        dlg.entry.focus_set()
+        dlg.update_idletasks()
+
+        if hasattr(self.popup, 'x') and hasattr(self.popup, 'y'):
+            dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{self.popup.x}+{self.popup.y}')
+
+        root.wait_window(self)
+
+    def add_node(self):
+        def ok():
+            text = dlg.entry.get().strip(' ')
+            if text:
+                iid = self.append(self.active_item, text=text, values=['Folder', 'new'])
+                self.update_value(1, iid, iid)
+                self.tags_reset()
+            dlg.destroy()
+
+        def cancel():
+            dlg.destroy()
+
+        root = self.winfo_toplevel()
+        dlg = AddNodeDialog(root)
+
+        dlg.button_ok.config(command=ok)
+        dlg.button_cancel.config(command=cancel)
+        dlg.entry.focus_set()
+        dlg.update_idletasks()
+
+        if hasattr(self.popup, 'x') and hasattr(self.popup, 'y'):
+            dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{self.popup.x}+{self.popup.y}')
+
+        root.wait_window(self)
+
+    def update_value(self, idx, value, item):
+        values = list(self.item(item, 'values'))
+        values[idx] = value
+        self.item(item, values=values)
 
     def remove(self, tag='selected'):
         parent = ''
@@ -548,9 +682,7 @@ class Treeview(ttk.Treeview):
 
         def walk(_parent, _data):
             iid = self.append(_parent, **_data)
-            values = list(_data['values'])
-            values[0] = iid
-            self.item(iid, values=values)
+            self.update_value(1, iid, iid)
 
             for _k, _value in _data.items():
                 if not isinstance(_value, dict):
@@ -593,10 +725,14 @@ class App(tk.Tk):
         self.style.theme_use('clam')
 
         tv = self.treeview = Treeview(self)
+        tv["columns"] = ('type', 'iid')
+
         tv.heading('#0', text='Name')
-        tv["columns"] = ("iid",)
-        tv.column("iid", width=150, minwidth=150, stretch=tk.YES)
-        tv.heading('#1', text='IID')
+        tv.heading('#1', text='Type')
+        tv.heading('#2', text='IID')
+
+        tv.column("type", width=150, minwidth=50)
+        tv.column("iid", width=150, minwidth=50, stretch=tk.YES)
 
         tv.tag_configure('odd', background='#ffffff')
         tv.tag_configure('even', background='#aaaaaa')
@@ -647,19 +783,19 @@ class App(tk.Tk):
             for idx in range(0, 4):
                 # Populating the tree with test data.
                 tag = 'even' if tag == 'odd' else 'odd'
-                parent = tv.insert('', text=f'Menu {idx}', values=[f'_{idx}'], open=1, tags=(tag,))
+                parent = tv.insert('', text=f'Menu {idx}', values=['Folder', f'_{idx}'], open=1, tags=(tag,))
                 for _idx in range(0, 2):
-                    tv.insert(parent, text=f'Item {_idx}', values=[f'{parent}_{_idx}'], tags=(tag,))
-                _parent = tv.insert(parent, text='Sub menu', values=[f'{parent}_2'], open=1, tags=(tag,))
+                    tv.insert(parent, text=f'Item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
+                _parent = tv.insert(parent, text='Sub menu', values=['Folder', f'{parent}_2'], open=1, tags=(tag,))
 
                 for _idx in range(0, 2):
-                    tv.insert(_parent, text=f'Sub item {_idx}', values=[f'{_parent}_{_idx}'], tags=(tag,))
-                tv.insert(_parent, text='Sub sub menu', values=[f'{parent}_2_2'], open=1, tags=(tag,))
+                    tv.insert(_parent, text=f'Sub item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
+                tv.insert(_parent, text='Sub sub menu', values=['Folder', f'{parent}_2_2', ], open=1, tags=(tag,))
                 for _idx in range(3, 5):
-                    tv.insert(_parent, text=f'Sub item {_idx}', values=[f'{_parent}_{_idx}'], tags=(tag,))
+                    tv.insert(_parent, text=f'Sub item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
 
                 for _idx in range(3, 5):
-                    tv.insert(parent, text=f'Item {_idx}', values=[f'{parent}_{_idx}'], tags=(tag,))
+                    tv.insert(parent, text=f'Item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
 
                 tv.tags_reset()
 
