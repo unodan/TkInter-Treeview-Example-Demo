@@ -328,8 +328,6 @@ class Treeview(ttk.Treeview):
             self.item(item, tags=_tags)
 
     def button_press(self, event):
-        self.select_window.withdraw()
-
         self.origin_x, self.origin_y = event.x, event.y
         item = self.origin_item = self.active_item = self.identify('item', event.x, event.y)
 
@@ -358,6 +356,8 @@ class Treeview(ttk.Treeview):
 
     def button_release(self, _):
         self.unbind('<Motion>')
+        self.select_window.withdraw()
+
         for item in self.selected_items:
             if self.tag_has('odd', item) or self.tag_has('even', item):
                 self.tag_remove(('selected', '_selected'), item)
@@ -541,6 +541,9 @@ class Treeview(ttk.Treeview):
             self.tag_replace('copy_even', 'even', item)
 
         def walk(_parent, _data):
+            if self.value_get(0, _parent) != 'Folder':
+                _parent = '' if not self.parent(_parent) else self.parent(_parent)
+
             iid = self.append(_parent, **_data)
             if not iid:
                 return
@@ -548,7 +551,7 @@ class Treeview(ttk.Treeview):
             self.tag_remove(('cut_odd', 'cut_even'), iid)
 
             self.tag_remove('selected', iid)
-            self.update_value(1, iid, iid)
+            self.value_update(1, iid, iid)
 
             for value in _data.values():
                 if not isinstance(value, dict):
@@ -578,7 +581,7 @@ class Treeview(ttk.Treeview):
             text = dlg.entry.get().strip(' ')
             if text:
                 iid = self.append(self.active_item, text=text, values=['Item', 'new'])
-                self.update_value(1, iid, iid)
+                self.value_update(1, iid, iid)
                 self.tags_reset()
             dlg.destroy()
 
@@ -603,7 +606,7 @@ class Treeview(ttk.Treeview):
             text = dlg.entry.get().strip(' ')
             if text:
                 iid = self.append(self.active_item, text=text, values=['Folder', 'new'])
-                self.update_value(1, iid, iid)
+                self.value_update(1, iid, iid)
                 self.tags_reset()
             dlg.destroy()
 
@@ -623,7 +626,14 @@ class Treeview(ttk.Treeview):
 
         root.wait_window(self)
 
-    def update_value(self, idx, value, item):
+    def value_get(self, idx, item):
+        if not item:
+            return ''
+        values = list(self.item(item, 'values'))
+        if 0 <= idx <= len(values):
+            return values[idx]
+
+    def value_update(self, idx, value, item):
         values = list(self.item(item, 'values'))
         values[idx] = value
         self.item(item, values=values)
@@ -750,7 +760,7 @@ class Treeview(ttk.Treeview):
 
         def walk(_parent, _data):
             iid = self.append(_parent, **_data)
-            self.update_value(1, iid, iid)
+            self.value_update(1, iid, iid)
 
             for _k, _value in _data.items():
                 if not isinstance(_value, dict):
@@ -851,26 +861,43 @@ class App(tk.Tk):
             for idx in range(0, 4):
                 # Populating the tree with test data.
                 tag = 'even' if tag == 'odd' else 'odd'
-                parent = tv.insert('', text=f'Menu {idx}', values=['Folder', f'_{idx}'], open=1, tags=(tag,))
-                for _idx in range(0, 2):
-                    tv.insert(parent, text=f'Item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
-                _parent = tv.insert(parent, text='Sub menu', values=['Folder', f'{parent}_2'], open=1, tags=(tag,))
+                iid = tv.append('', text=f'Menu {idx}', values=['Folder', 'new'], open=1, tags=(tag,))
+                tv.value_update(1, iid, iid)
 
                 for _idx in range(0, 2):
-                    tv.insert(_parent, text=f'Sub item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
-                tv.insert(_parent, text='Sub sub menu', values=['Folder', f'{parent}_2_2', ], open=1, tags=(tag,))
-                for _idx in range(3, 5):
-                    tv.insert(_parent, text=f'Sub item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
+                    _iid = tv.append(iid, text=f'Item {_idx}', values=['Item', 'new'], tags=(tag,))
+                    tv.value_update(1, _iid, _iid)
 
-                for _idx in range(3, 5):
-                    tv.insert(parent, text=f'Item {_idx}', values=['Item', f'{parent}_{_idx}'], tags=(tag,))
+                __iid = tv.append(iid, text='Sub menu 0', values=['Folder', 'new'], open=1, tags=(tag,))
+                tv.value_update(1, __iid, __iid)
+
+                for _idx in range(2, 4):
+                    _iid = tv.append(iid, text=f'Item {_idx}', values=['Item', 'new'], tags=(tag,))
+                    tv.value_update(1, _iid, _iid)
+
+                _iid = tv.append(iid, text='Sub menu 1', values=['Folder', 'new'], open=1, tags=(tag,))
+                tv.value_update(1, _iid, _iid)
+
+                for _idx in range(0, 2):
+                    _iid = tv.append(__iid, text=f'Sub item {_idx}', values=['Item', 'new'], tags=(tag,))
+                    tv.value_update(1, _iid, _iid)
+
+                iid = tv.append(__iid, text='Sub sub menu', values=['Folder', 'new', ], open=1, tags=(tag,))
+                tv.value_update(1, iid, iid)
+
+                for _idx in range(0, 2):
+                    _iid = tv.append(iid, text=f'Sub item {_idx}', values=['Item', 'new'], tags=(tag,))
+                    tv.value_update(1, _iid, _iid)
+
+                for _idx in range(2, 4):
+                    _iid = tv.append(__iid, text=f'Sub item {_idx}', values=['Item', 'new'], tags=(tag,))
+                    tv.value_update(1, _iid, _iid)
 
                 tv.tags_reset()
 
-        dump(settings)
-
-        tv.yview_moveto(settings['scroll']['yview'][0])
-        tv.xview_moveto(settings['scroll']['xview'][0])
+        if 'scroll' in settings:
+            tv.yview_moveto(settings['scroll']['yview'][0])
+            tv.xview_moveto(settings['scroll']['xview'][0])
 
         self.title('Treeview Demo')
         self.geometry(self.app_data['geometry'])
