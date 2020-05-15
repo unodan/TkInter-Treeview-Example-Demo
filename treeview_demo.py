@@ -142,50 +142,113 @@ class Entry(ttk.Entry):
         self.var = tk.StringVar()
 
 
-class Treeview(ttk.Treeview):
+class Scrollbar(ttk.Scrollbar):
     def __init__(self, parent, **kwargs):
+        self.callback = kwargs.pop('callback', None)
         super().__init__(parent, **kwargs)
 
+    def set(self, low, high):
+        if float(low) > 0 or float(high) < 1:
+            ttk.Scrollbar.set(self, low, high)
+            self.grid()
+        else:
+            self.grid_remove()
+
+        if self.callback:
+            self.callback('scrollbar')
+
+
+class Treeview(ttk.Treeview):
+    def __init__(self, parent, **kwargs):
+        widths = kwargs.pop('widths', None)
+        self.callback = kwargs.pop('callback', None)
+        super().__init__(parent, **kwargs)
+
+        def setup_tree():
+            self["columns"] = ('#1', '#2')
+
+            self.heading('#0', text='Name')
+            self.heading('#1', text='Type')
+            self.heading('#2', text='IID')
+
+            for idx, width in enumerate(widths):
+                self.column(f'#{idx}', width=widths[idx], minwidth=3, stretch=tk.NO)
+            self.column(f'#{len(widths)-1}', stretch=tk.YES)
+
+            self.tag_configure('odd', background='#ffffff')
+            self.tag_configure('even', background='#aaaaaa')
+
+            self.tag_configure('cut_odd', background='#ffd4be')
+            self.tag_configure('cut_even', background='#ff5608')
+
+            self.tag_configure('copy_odd', background='#ceffff')
+            self.tag_configure('copy_even', background='#1ca0d8')
+
+            self.tag_configure('selected_odd', background='#b0eab2')
+            self.tag_configure('selected_even', background='#25a625')
+
+        def setup_popup_menu():
+            popup = self.popup = tk.Menu(self.root, tearoff=0)
+            create_new = tk.Menu(popup, tearoff=0)
+
+            popup.add_cascade(label="Create New", menu=create_new)
+            popup.add_separator()
+            popup.add_command(label="Cut", command=self.cut)
+            popup.add_command(label="Copy", command=self.copy)
+            popup.add_command(label="Paste", command=self.paste)
+            popup.add_separator()
+            popup.add_command(label="Delete", command=self.remove)
+            popup.add_separator()
+            popup.add_command(label="Rename", command=self.rename)
+
+            create_new.add_command(label="Item", command=self.add_leaf)
+            create_new.add_separator()
+            create_new.add_command(label="Folder", command=self.add_node)
+
+        def setup_select_window():
+            sw = self.select_window = tk.Toplevel(self.root)
+            sw.wait_visibility(self.root)
+            sw.withdraw()
+            sw.config(bg='#00aaff')
+            sw.overrideredirect(True)
+            sw.wm_attributes('-alpha', 0.3)
+            sw.wm_attributes("-topmost", True)
+
         self.root = parent.winfo_toplevel()
+
+        self.columns = {}
+        self.column_widths = [10, 10, 0]
         self.selected_items = []
-        self.origin_x = \
+
+        self.popup = \
+            self.origin_x = \
             self.origin_y = \
             self.active_item = \
-            self.origin_item = None
-
-        sw = self.select_window = tk.Toplevel(self.root)
-        sw.wait_visibility(self.root)
-        sw.withdraw()
-        sw.config(bg='#00aaff')
-        sw.overrideredirect(True)
-        sw.wm_attributes('-alpha', 0.3)
-        sw.wm_attributes("-topmost", True)
+            self.origin_item = \
+            self.select_window = None
 
         self.font = tkfont.nametofont('TkTextFont')
         self.style = parent.style
         self.config(selectmode="none")
         self.linespace = self.font.metrics('linespace') + 5
 
-        popup = self.popup = tk.Menu(self.root, tearoff=0)
-        create_new = tk.Menu(popup, tearoff=0)
-
-        popup.add_cascade(label="Create New", menu=create_new)
-        popup.add_separator()
-        popup.add_command(label="Cut", command=self.cut)
-        popup.add_command(label="Copy", command=self.copy)
-        popup.add_command(label="Paste", command=self.paste)
-        popup.add_separator()
-        popup.add_command(label="Delete", command=self.remove)
-        popup.add_separator()
-        popup.add_command(label="Rename", command=self.rename)
-
-        create_new.add_command(label="Item", command=self.add_leaf)
-        create_new.add_separator()
-        create_new.add_command(label="Folder", command=self.add_node)
+        setup_tree()
+        setup_popup_menu()
+        setup_select_window()
 
         self.bindings_set()
 
         parent.style.map("Treeview", foreground=self.fixed_map("foreground"), background=self.fixed_map("background"))
+
+        sb_x = Scrollbar(self.root, callback=self.callback)
+        sb_x.configure(command=self.xview, orient=tk.HORIZONTAL)
+
+        sb_y = Scrollbar(self.root, callback=self.callback)
+        sb_y.configure(command=self.yview)
+
+        self.configure(xscrollcommand=sb_x.set, yscrollcommand=sb_y.set)
+        sb_y.grid(sticky=tk.NSEW, row=0, column=990)
+        sb_x.grid(sticky=tk.NSEW, row=980, column=0)
 
     def fixed_map(self, option):
         return [elm for elm in self.style.map("Treeview", query_opt=option) if elm[:2] != ("!disabled", "!selected")]
@@ -265,30 +328,35 @@ class Treeview(ttk.Treeview):
             self.item(item, tags=_tags)
 
     def button_press(self, event):
+        self.select_window.withdraw()
+
         self.origin_x, self.origin_y = event.x, event.y
         item = self.origin_item = self.active_item = self.identify('item', event.x, event.y)
 
-        sw = self.select_window
-        sw.geometry('0x0+0+0')
-        sw.deiconify()
+        component = self.identify('region', event.x, event.y)
+        if component in ('tree', 'cell', 'nothing'):
+            sw = self.select_window
+            sw.geometry('0x0+0+0')
+            sw.deiconify()
 
-        self.bind('<Motion>', self.selected_set)
+            self.bind('<Motion>', self.selected_set)
 
-        if not item:
+            if not item:
+                if not event.state & 1 << 2:
+                    self.tags_reset()
+                return
+
             if not event.state & 1 << 2:
                 self.tags_reset()
-            return
-
-        if not event.state & 1 << 2:
-            self.tags_reset()
-            self.tag_add('selected', item)
-            if self.tag_has('odd', item):
-                self.tag_replace('odd', 'selected_odd', item)
-            elif self.tag_has('even', item):
-                self.tag_replace('even', 'selected_even', item)
+                self.tag_add('selected', item)
+                if self.tag_has('odd', item):
+                    self.tag_replace('odd', 'selected_odd', item)
+                elif self.tag_has('even', item):
+                    self.tag_replace('even', 'selected_even', item)
+        elif component == 'separator':
+            self.bind('<Motion>', lambda x='www': self.callback(x))
 
     def button_release(self, _):
-        self.select_window.withdraw()
         self.unbind('<Motion>')
         for item in self.selected_items:
             if self.tag_has('odd', item) or self.tag_has('even', item):
@@ -480,7 +548,7 @@ class Treeview(ttk.Treeview):
             self.tag_remove(('cut_odd', 'cut_even'), iid)
 
             self.tag_remove('selected', iid)
-            self.update_value(0, iid, iid)
+            self.update_value(1, iid, iid)
 
             for value in _data.values():
                 if not isinstance(value, dict):
@@ -720,47 +788,35 @@ class Treeview(ttk.Treeview):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-
-        self.style = ttk.Style()
-        self.style.theme_use('clam')
-
-        tv = self.treeview = Treeview(self)
-        tv["columns"] = ('type', 'iid')
-
-        tv.heading('#0', text='Name')
-        tv.heading('#1', text='Type')
-        tv.heading('#2', text='IID')
-
-        tv.column("type", width=150, minwidth=50)
-        tv.column("iid", width=150, minwidth=50, stretch=tk.YES)
-
-        tv.tag_configure('odd', background='#ffffff')
-        tv.tag_configure('even', background='#aaaaaa')
-
-        tv.tag_configure('cut_odd', background='#ffd4be')
-        tv.tag_configure('cut_even', background='#ff5608')
-
-        tv.tag_configure('copy_odd', background='#ceffff')
-        tv.tag_configure('copy_even', background='#1ca0d8')
-
-        tv.tag_configure('selected_odd', background='#b0eab2')
-        tv.tag_configure('selected_even', background='#25a625')
-
-        self.style.configure('TEntry', padding=(3, 2))
-
-        self.title('Treeview Demo')
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
-        self.columnconfigure(2, weight=1)
-
-        tv.grid(sticky='NSEW', columnspan=990)
 
         self.app_data = {}
+        self.style = ttk.Style()
+        self.treeview = None
+
+        self.style.theme_use('clam')
+        self.style.configure('TEntry', padding=(3, 2))
+
         self.init()
+        self.bindings()
 
     def init(self):
-        tv = self.treeview
+        def info():
+            print(self.app_data)
+
+        def update_treeview(event):
+            _settings = dict(self.app_data['treeview']['settings'])
+            if event == 'scrollbar':
+                _settings.update({'scroll': {'xview': tv.xview(), 'yview': tv.yview()}})
+            else:
+                widths = []
+                for c in range(0, len(tv['columns'])+1):
+                    widths.append(tv.column(f'#{c}', 'width'))
+                    _settings['columns']['widths'] = widths
+
+            self.app_data['treeview']['settings'] = tuple(_settings.items())
+
         self.protocol('WM_DELETE_WINDOW', self.exit)
 
         file = path.join(ABS_PATH, 'app.json')
@@ -769,10 +825,22 @@ class App(tk.Tk):
                 self.app_data = json.load(f)
         else:
             self.app_data = {
-                'geometry': self.geometry(),
+                'geometry': '500x700',
+                'treeview': {
+                    'type': 'Treeview',
+                    'settings': (
+                        ('columns', {
+                            'widths': [100, 100, 100]
+                        }),
+                    ),
+                }
             }
 
-        self.geometry(self.app_data.get('geometry', ''))
+        settings = dict(self.app_data['treeview']['settings'])
+        tv = self.treeview = Treeview(self, callback=update_treeview, widths=settings['columns']['widths'])
+        self.treeview.grid(row=0, column=0, sticky=tk.NSEW, columnspan=990)
+
+        ttk.Button(self, text='info', command=info).grid(sticky=tk.EW, row=990, columnspan=1000)
 
         file = path.join(ABS_PATH, 'treeview.json')
         if path.exists(file):
@@ -799,8 +867,16 @@ class App(tk.Tk):
 
                 tv.tags_reset()
 
+        dump(settings)
+
+        tv.yview_moveto(settings['scroll']['yview'][0])
+        tv.xview_moveto(settings['scroll']['xview'][0])
+
+        self.title('Treeview Demo')
+        self.geometry(self.app_data['geometry'])
+        self.update_idletasks()
+
     def exit(self):
-        self.app_data.update({'geometry': self.geometry()})
         self.save()
         self.destroy()
 
@@ -822,6 +898,12 @@ class App(tk.Tk):
 
             with open(file, 'w') as f:
                 json.dump(self.app_data, f, indent=3)
+
+    def bindings(self):
+        def update_geometry(_):
+            self.app_data['geometry'] = self.geometry()
+
+        self.bind('<Configure>', update_geometry)
 
 
 def main():
