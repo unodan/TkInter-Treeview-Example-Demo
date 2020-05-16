@@ -218,6 +218,7 @@ class Treeview(ttk.Treeview):
 
         self.columns = {}
         self.column_widths = [10, 10, 0]
+        self.maximized_column_widths = {}
         self.selected_items = []
 
         self.popup = \
@@ -227,10 +228,9 @@ class Treeview(ttk.Treeview):
             self.origin_item = \
             self.select_window = None
 
-        self.font = tkfont.nametofont('TkTextFont')
         self.style = parent.style
+
         self.config(selectmode="none")
-        self.linespace = self.font.metrics('linespace') + 5
 
         setup_tree()
         setup_popup_menu()
@@ -249,6 +249,12 @@ class Treeview(ttk.Treeview):
         self.configure(xscrollcommand=sb_x.set, yscrollcommand=sb_y.set)
         sb_y.grid(sticky=tk.NSEW, row=0, column=990)
         sb_x.grid(sticky=tk.NSEW, row=980, column=0)
+
+        font = self.default_font = tkfont.nametofont('TkDefaultFont')
+        self.linespace = font.metrics('linespace')
+        self.font_width = self.default_font.measure('W')
+        self.style.configure(".", indicatorsize=self.linespace)
+        self.style.configure('Treeview', indent=self.linespace)
 
     def fixed_map(self, option):
         return [elm for elm in self.style.map("Treeview", query_opt=option) if elm[:2] != ("!disabled", "!selected")]
@@ -327,7 +333,7 @@ class Treeview(ttk.Treeview):
                         _tags.pop(_tags.index(_tag))
             self.item(item, tags=_tags)
 
-    def button_press(self, event):
+    def single_button_press(self, event):
         self.origin_x, self.origin_y = event.x, event.y
         item = self.origin_item = self.active_item = self.identify('item', event.x, event.y)
 
@@ -353,6 +359,10 @@ class Treeview(ttk.Treeview):
                     self.tag_replace('even', 'selected_even', item)
         elif component == 'separator':
             self.bind('<Motion>', lambda x='www': self.callback(x))
+
+    def double_button_press(self, event):
+        print(self.winfo_toplevel().attributes('-zoomed'))
+        print(self.identify_column(event.x))
 
     def button_release(self, _):
         self.unbind('<Motion>')
@@ -453,7 +463,8 @@ class Treeview(ttk.Treeview):
     def bindings_set(self):
         bindings = {
             '<Escape>': self.tags_reset,
-            '<ButtonPress-1>': self.button_press,
+            '<ButtonPress-1>': self.single_button_press,
+            '<Double-Button-1>': self.column_maximize,
             '<ButtonRelease-1>': self.button_release,
             '<ButtonPress-3>': self.popup_menu,
             '<<TreeviewOpen>>': self.expand,
@@ -461,6 +472,16 @@ class Treeview(ttk.Treeview):
         }
         for command, callback in bindings.items():
             self.bind(command, callback)
+
+    def get(self, iid=''):
+        def get_data(_item, _data):
+            _data[_item] = self.item(_item)
+            for node in self.get_children(_item):
+                get_data(node, _data[_item])
+
+        data = {}
+        get_data(iid, data)
+        return data
 
     def cut(self):
         for tag in ('copy', 'cut'):
@@ -663,6 +684,18 @@ class Treeview(ttk.Treeview):
         self.tags_reset()
         self.reindex('')
 
+    def get_length(self, item, column=None):
+        def level(_item):
+            _level = 0
+            while self.parent(_item):
+                _level += 1
+                _item = self.parent(_item)
+            return _level + 1
+
+        if not column:
+            text = self.item(item, 'text')
+            return self.default_font.measure(text)+self.linespace*level(item)+(self.font_width*2)
+
     def insert(self, parent='', index=tk.END, **kwargs):
         def get_iid(_parent=''):
             nodes = self.get_children(_parent)
@@ -687,10 +720,11 @@ class Treeview(ttk.Treeview):
 
             iid = get_iid(parent)
             item = super(Treeview, self).insert(parent, index, iid=f'{iid}', **kwargs)
-            return item
 
         except NameError:
             return False
+
+        return item
 
     def append(self, parent, **kwargs):
         for key, value in kwargs.copy().items():
@@ -703,6 +737,27 @@ class Treeview(ttk.Treeview):
         def set_row_colors():
             self.tags_reset()
         self.after(1, set_row_colors)
+
+    def reindex(self, parent):
+        data = self.get(parent)
+        data = filter_dict_only(data[parent])
+
+        for item in self.get_children(parent):
+            self.delete(item)
+
+        def walk(_parent, _data):
+            iid = self.append(_parent, **_data)
+            self.value_update(1, iid, iid)
+
+            for _k, _value in _data.items():
+                if not isinstance(_value, dict):
+                    continue
+                walk(iid, _value)
+
+        for k, value in data.items():
+            if not isinstance(value, dict):
+                continue
+            walk(parent, value)
 
     def collapse(self, _):
         def set_row_colors():
@@ -741,37 +796,6 @@ class Treeview(ttk.Treeview):
 
         return data
 
-    def get(self, iid=''):
-        def get_data(_item, _data):
-            _data[_item] = self.item(_item)
-            for node in self.get_children(_item):
-                get_data(node, _data[_item])
-
-        data = {}
-        get_data(iid, data)
-        return data
-
-    def reindex(self, parent):
-        data = self.get(parent)
-        data = filter_dict_only(data[parent])
-
-        for item in self.get_children(parent):
-            self.delete(item)
-
-        def walk(_parent, _data):
-            iid = self.append(_parent, **_data)
-            self.value_update(1, iid, iid)
-
-            for _k, _value in _data.items():
-                if not isinstance(_value, dict):
-                    continue
-                walk(iid, _value)
-
-        for k, value in data.items():
-            if not isinstance(value, dict):
-                continue
-            walk(parent, value)
-
     def popup_menu(self, event):
         self.popup.x, self.popup.y = event.x_root, event.y_root
         item = self.active_item = self.identify('item', event.x, event.y)
@@ -794,6 +818,29 @@ class Treeview(ttk.Treeview):
 
         self.popup.tk_popup(event.x_root, event.y_root, 0)
 
+    def column_maximize(self, event):
+        column = self.identify_column(event.x)
+
+        def walk(_item, _length):
+            _item_length = self.get_length(_item, int(column.lstrip('#')))
+            if _item_length > _length:
+                _length = _item_length
+
+            for node in self.get_children(_item):
+                if self.item(node, 'open'):
+                    _length = walk(node, _length)
+
+            return _length
+
+        width = self.get_length('_0', int(column.lstrip('#')))
+        for item in self.get_children():
+            if self.item(item, 'open'):
+                length = walk(item, width)
+                if length > width:
+                    width = length
+
+        self.column(column, width=width)
+
 
 class App(tk.Tk):
     def __init__(self):
@@ -807,6 +854,7 @@ class App(tk.Tk):
 
         self.style.theme_use('clam')
         self.style.configure('TEntry', padding=(3, 2))
+
 
         self.init()
         self.bindings()
@@ -899,11 +947,20 @@ class App(tk.Tk):
             tv.yview_moveto(settings['scroll']['yview'][0])
             tv.xview_moveto(settings['scroll']['xview'][0])
 
+        if 'attributes' in self.app_data:
+            lst = self.app_data['attributes']
+            attributes = {lst[i]: lst[i + 1] for i in range(0, len(lst), 2)}
+
+            if attributes['-zoomed']:
+                self.attributes('-zoomed', True)
+            else:
+                self.geometry(self.app_data['geometry'])
+
         self.title('Treeview Demo')
-        self.geometry(self.app_data['geometry'])
         self.update_idletasks()
 
     def exit(self):
+        self.app_data['attributes'] = self.attributes()
         self.save()
         self.destroy()
 
