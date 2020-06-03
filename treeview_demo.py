@@ -3,10 +3,6 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.font as tkfont
 
-from ete3 import Tree
-
-# import ete3
-
 from datetime import datetime
 from os import path, makedirs
 ABS_PATH = path.dirname(path.realpath(__file__))
@@ -96,34 +92,36 @@ class App(tk.Tk):
                 data = {
                     'headings': (
                         {'text': 'Name', 'anchor': tk.W},
+                        {'text': 'IID', 'anchor': tk.W},
                         {'text': 'Date Modified', 'anchor': tk.W},
                         {'text': 'Type', 'anchor': tk.W},
                         {'text': 'Size', 'anchor': tk.W},
                     ),
                     'columns': (
                         {'width': 180, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 100, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 100, 'minwidth': 3, 'stretch': tk.YES},
                     ),
                     'data': (
-                        {'text': 'Folder 0', 'open': 1, 'values': (dt_string, "Folder", ""),
+                        {'text': 'Folder 0', 'open': 1, 'values': ('', dt_string, "Folder", ""),
                          'children': (
-                             {'text': 'photo1.png', 'values': (dt_string, 'Item', "2.6 KB")},
-                             {'text': 'photo2.png', 'values': (dt_string, 'Item', "2.6 KB")},
-                             {'text': 'photo3.png', 'values': (dt_string, 'Item', "2.7 KB")},
-                             {'text': 'Folder 0_1', 'open': 1, 'values': (dt_string, "Folder", ""),
+                             {'text': 'photo1.png', 'values': ('', dt_string, 'Item', "2.6 KB")},
+                             {'text': 'photo2.png', 'values': ('', dt_string, 'Item', "2.6 KB")},
+                             {'text': 'photo3.png', 'values': ('', dt_string, 'Item', "2.7 KB")},
+                             {'text': 'Folder 0_1', 'open': 1, 'values': ('', dt_string, "Folder", ""),
                               'children': (
-                                  {'text': 'photo1.png', 'values': (dt_string, 'Item', "2.6 KB")},
-                                  {'text': 'photo2.png', 'values': (dt_string, 'Item', "2.6 KB")},
-                                  {'text': 'photo3.png', 'values': (dt_string, 'Item', "2.8 KB")},
+                                  {'text': 'photo1.png', 'values': ('', dt_string, 'Item', "2.6 KB")},
+                                  {'text': 'photo2.png', 'values': ('', dt_string, 'Item', "2.6 KB")},
+                                  {'text': 'photo3.png', 'values': ('', dt_string, 'Item', "2.8 KB")},
                               )},
                          )},
-                        {'text': 'Folder 1', 'open': 1, 'values': (dt_string, "Folder", ""),
+                        {'text': 'Folder 1', 'open': 1, 'values': ('', dt_string, "Folder", ""),
                          'children': (
-                             {'text': 'photo4.png', 'values': (dt_string, 'Item', "2.6 KB")},
-                             {'text': 'photo5.png', 'values': (dt_string, 'Item', "2.6 KB")},
-                             {'text': 'photo6.png', 'values': (dt_string, 'Item', "2.9 KB")},
+                             {'text': 'photo4.png', 'values': ('', dt_string, 'Item', "2.6 KB")},
+                             {'text': 'photo5.png', 'values': ('', dt_string, 'Item', "2.6 KB")},
+                             {'text': 'photo6.png', 'values': ('', dt_string, 'Item', "2.9 KB")},
                          )},
                     )
                 }
@@ -416,12 +414,29 @@ class Treeview(ttk.Treeview):
                         _tags.pop(_tags.index(_tag))
             self.item(item, tags=_tags)
 
+    def value_get(self, idx, item):
+        if not item:
+            return ''
+        values = list(self.item(item, 'values'))
+        if 0 <= idx <= len(values):
+            return values[idx]
+
+    def value_update(self, idx, value, item):
+        values = list(self.item(item, 'values'))
+        values[idx] = value
+        self.item(item, values=values)
+
     def add_leaf(self):
         def ok():
             text = dlg.entry.get().strip(' ')
             if text:
                 now = datetime.now()
-                self.insert(self.focus(), text=text, values=[now.strftime("%d/%m/%Y %H:%M:%S"), 'Item', '3.5Mb'])
+                iid = self.insert(
+                    self.focus(),
+                    text=text,
+                    values=['', now.strftime("%d/%m/%Y %H:%M:%S"), 'Item', '3.5Mb']
+                )
+                self.value_update(0, iid, iid)
                 self.tags_reset()
             dlg.destroy()
 
@@ -446,7 +461,13 @@ class Treeview(ttk.Treeview):
             text = dlg.entry.get().strip(' ')
             if text:
                 now = datetime.now()
-                self.insert(self.focus(), text=text, values=[now.strftime("%d/%m/%Y %H:%M:%S"), 'Folder', ''])
+                iid = self.insert(
+                    self.focus(),
+                    text=text,
+                    values=['', now.strftime("%d/%m/%Y %H:%M:%S"), 'Folder', '']
+                )
+                self.value_update(0, iid, iid)
+                self.item(iid, open=1)
                 self.tags_reset()
             dlg.destroy()
 
@@ -499,7 +520,10 @@ class Treeview(ttk.Treeview):
         if not len(selections):
             return
 
+        now = datetime.now()
         parent = self.focus()
+        dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+
         if self.detached:
             for item in selections:
                 self.reattach(item, parent, tk.END)
@@ -509,13 +533,17 @@ class Treeview(ttk.Treeview):
             for item in selections:
                 ancestor = self.parent(item)
                 dst = cr[ancestor] if ancestor in cr else parent
+                self.value_update(1, dt_string, item)
                 iid = self.insert(dst, **self.item(item))
+                self.value_update(0, iid, iid)
+
                 self.tag_remove('copy', iid)
                 cr[item] = iid
 
         self.tags_reset(excluded='copy')
         self.selection_remove(self.tag_has('copy'))
         self.selection_set(self.focus())
+        self.reindex()
 
     def delete(self):
         super(Treeview, self).delete(*self.selection())
@@ -538,17 +566,32 @@ class Treeview(ttk.Treeview):
             self.anchor = self.focus()
 
     def shift_up(self, event):
-        item = self.identify('item', event.x, event.y-self.style.lookup('Treeview', 'rowheight'))
-        self.selection_add(item)
-        self.focus(item)
+        prev = self.prev(self.focus())
+        parent = self.parent(self.focus())
+        if prev and parent:
+            self.focus(prev)
+            self.selection_toggle(prev)
+        elif not parent:
+            print(f'I0{hex(int(self.focus().lstrip("I"), 16)-1).split("x")[1]}', self.focus())
+            prev = f'I0{hex(int(self.focus().lstrip("I"), 16)-1).split("x")[1]}'
+            self.focus(prev)
+            self.selection_add(prev)
+
+        else:
+            self.focus(parent)
+            self.selection_toggle(parent)
 
         return 'break'
 
     def populate(self, parent, data=()):
         for item in data:
             iid = self.insert(parent, tk.END, **item)
+            self.value_update(0, iid, iid)
+
             if 'children' in item:
                 self.populate(iid, item['children'])
+
+            self.value_update(0, iid, iid)
 
     def serialize(self):
         def get_data(_item, _data):
@@ -577,6 +620,15 @@ class Treeview(ttk.Treeview):
         data['data'] = tree_data
 
         return data
+
+    def reindex(self):
+        def walk(_item):
+            self.value_update(0, _item, _item)
+            for node in self.get_children(_item):
+                walk(node)
+
+        for item in self.get_children():
+            walk(item)
 
     def popup_menu(self, event):
         self.popup.x, self.popup.y = event.x_root, event.y_root
