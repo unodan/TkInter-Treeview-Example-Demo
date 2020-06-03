@@ -126,7 +126,7 @@ class App(tk.Tk):
                     )
                 }
 
-            tree = self.treeview = Treeview(self.frame, selectmode=tk.EXTENDED, setup=data)
+            tree = self.treeview = Treeview(self.frame, scroll=(True, True), setup=data)
             tree.grid(sticky=tk.NSEW, row=0, column=0)
 
         setup_app()
@@ -274,11 +274,33 @@ class Listbox(tk.Listbox):
             self.itemconfig(i, {'bg': color})
 
 
+class Scrollbar(ttk.Scrollbar):
+    def __init__(self, parent, **kwargs):
+        self.callback = kwargs.pop('callback', None)
+        super().__init__(parent, **kwargs)
+
+    def set(self, low, high):
+        if float(low) > 0 or float(high) < 1:
+            ttk.Scrollbar.set(self, low, high)
+            self.grid()
+        else:
+            self.grid_remove()
+
+        if self.callback:
+            self.callback('scrollbar')
+
+
 class Treeview(ttk.Treeview):
     def __init__(self, parent, **kwargs):
+        self.frame = ttk.Frame(parent)
+        self.frame.rowconfigure(0, weight=1)
+        self.frame.columnconfigure(0, weight=1)
+
         setup = kwargs.pop('setup', {})
         data = setup.pop('data', [])
-        super().__init__(parent, **kwargs)
+        scroll = kwargs.pop('scroll', (False, False))
+        super().__init__(self.frame, **kwargs)
+        self.frame.grid(sticky=tk.NSEW)
 
         self.detached = []
         self.popup = None
@@ -334,6 +356,16 @@ class Treeview(ttk.Treeview):
             for idx, cfg in enumerate(data['columns']):
                 _id = cfg['column'] if 'column' in cfg else f'#{idx}'
                 self.column(_id, width=cfg['width'], minwidth=cfg['minwidth'], stretch=cfg['stretch'])
+
+        sb_x = Scrollbar(self.frame)
+        sb_x.configure(command=self.xview, orient=tk.HORIZONTAL)
+
+        sb_y = Scrollbar(self.frame)
+        sb_y.configure(command=self.yview)
+
+        self.configure(xscrollcommand=sb_x.set, yscrollcommand=sb_y.set)
+        sb_y.grid(sticky=tk.NSEW, row=0, column=990)
+        sb_x.grid(sticky=tk.NSEW, row=980, column=0, columnspan=1000)
 
         set_style()
         set_popup_menu()
@@ -572,12 +604,13 @@ class Treeview(ttk.Treeview):
             self.focus(prev)
             self.selection_toggle(prev)
         elif not parent:
-            print(f'I0{hex(int(self.focus().lstrip("I"), 16)-1).split("x")[1]}', self.focus())
+            print(hex(int(self.focus().lstrip("I"), 16)-1).split("x")[1])
             prev = f'I0{hex(int(self.focus().lstrip("I"), 16)-1).split("x")[1]}'
             self.focus(prev)
             self.selection_add(prev)
 
         else:
+            print(222)
             self.focus(parent)
             self.selection_toggle(parent)
 
