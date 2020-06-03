@@ -3,6 +3,10 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.font as tkfont
 
+from ete3 import Tree
+
+# import ete3
+
 from datetime import datetime
 from os import path, makedirs
 ABS_PATH = path.dirname(path.realpath(__file__))
@@ -79,8 +83,8 @@ class App(tk.Tk):
             font = tkfont.nametofont('TkDefaultFont')
             self.linespace = font.metrics('linespace')
             rowheight = self.linespace + tv_line_padding
-            self.style.configure('Treeview.Heading', padding=tv_heading_padding)
             self.style.configure('Treeview', rowheight=rowheight)
+            self.style.configure('Treeview.Heading', padding=tv_heading_padding)
 
             file = path.join(ABS_PATH, 'treeview.json')
             if path.exists(file):
@@ -124,7 +128,7 @@ class App(tk.Tk):
                     )
                 }
 
-            tree = self.treeview = Treeview(self.frame, setup=data)
+            tree = self.treeview = Treeview(self.frame, selectmode=tk.EXTENDED, setup=data)
             tree.grid(sticky=tk.NSEW, row=0, column=0)
 
         setup_app()
@@ -133,21 +137,12 @@ class App(tk.Tk):
         self.geometry(self.app_data['geometry'])
 
     def exit(self):
-        self.app_data['geometry'] = self.geometry()
+        self.app_data.update({'geometry': self.geometry()})
 
         self.save()
         self.destroy()
 
     def save(self):
-        file = path.join(ABS_PATH, 'treeview.json')
-        if file:
-            dirname = path.dirname(file)
-            if not path.exists(dirname):
-                makedirs(dirname)
-
-            with open(file, 'w') as f:
-                json.dump(self.treeview.serialize(), f, indent=3)
-
         file = path.join(ABS_PATH, 'app.json')
         if file:
             dirname = path.dirname(file)
@@ -156,6 +151,15 @@ class App(tk.Tk):
 
             with open(file, 'w') as f:
                 json.dump(self.app_data, f, indent=3)
+
+        file = path.join(ABS_PATH, 'treeview.json')
+        if file:
+            dirname = path.dirname(file)
+            if not path.exists(dirname):
+                makedirs(dirname)
+
+            with open(file, 'w') as f:
+                json.dump(self.treeview.serialize(), f, indent=3)
 
 
 class DialogBase(tk.Toplevel):
@@ -278,10 +282,12 @@ class Treeview(ttk.Treeview):
         data = setup.pop('data', [])
         super().__init__(parent, **kwargs)
 
-        self.popup = None
-        self.style = ttk.Style()
         self.detached = []
-        self.header_height = 0
+        self.popup = None
+        self.selected = None
+        self.header_height = None
+
+        self.style = ttk.Style()
 
         if setup:
             self.setup(setup)
@@ -463,53 +469,53 @@ class Treeview(ttk.Treeview):
     def set_row_colors(self, _=None):
         self.after(1, self.tags_reset)
 
-    def cut(self):
+    def cut(self, _=None):
         selections = list(self.selection())
-        self.detached = selections
+        for item in reversed(selections):
+            if self.parent(item) in selections:
+                selections.pop(selections.index(item))
+
+        def walk(_item):
+            self.tag_add('copy', _item)
+            for _item in self.get_children(_item):
+                walk(_item)
+
+        for item in selections:
+            walk(item)
+
         self.detach(*selections)
+        self.detached = selections
+        self.tags_reset(excluded='copy')
 
-        def walk(_item):
-            self.tag_add('copy', _item)
-            for _item in self.get_children(_item):
-                walk(_item)
+    def copy(self, _=None):
+        self.selected = self.selection()
 
-        for item in selections:
-            walk(item)
+    def paste(self, _=None):
+        selections = self.detached if self.detached else self.selected
 
-        self.tags_reset()
+        if not self.selected and not self.detached:
+            selections = self.tag_has('copy')
 
-    def copy(self):
-        self.tag_remove('copy')
+        if not len(selections):
+            return
 
-        def walk(_item):
-            self.tag_add('copy', _item)
-            self.selection_add(_item)
-            for _item in self.get_children(_item):
-                walk(_item)
-
-        for item in self.selection():
-            walk(item)
-
-    def paste(self):
-        selections = self.detached if self.detached else self.tag_has('copy')
-
-        items = {}
-        dst = self.focus()
-        self.selection_remove(selections)
-
-        for item in selections:
-            parent = self.parent(item)
-            if parent in selections:
-                dst = items[parent]
-
-            if self.detached:
-                self.reattach(item, dst, tk.END)
-                self.detached = False
-            else:
+        parent = self.focus()
+        if self.detached:
+            for item in selections:
+                self.reattach(item, parent, tk.END)
+            self.detached = False
+        else:
+            cr = {}  # Cross reference.
+            for item in selections:
+                ancestor = self.parent(item)
+                dst = cr[ancestor] if ancestor in cr else parent
                 iid = self.insert(dst, **self.item(item))
-                items[item] = iid
                 self.tag_remove('copy', iid)
-                self.tags_reset(excluded='copy')
+                cr[item] = iid
+
+        self.tags_reset(excluded='copy')
+        self.selection_remove(self.tag_has('copy'))
+        self.selection_set(self.focus())
 
     def delete(self):
         super(Treeview, self).delete(*self.selection())
@@ -518,6 +524,25 @@ class Treeview(ttk.Treeview):
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
         return super(Treeview, self).insert(parent, index, **kwargs)
+
+    def control_a(self, _):
+        def select(_child):
+            self.selection_add(_child)
+            for node in self.get_children(_child):
+                select(node)
+        for child in self.get_children():
+            select(child)
+
+    def key_press(self, event):
+        if 'Shift' in event.keysym:
+            self.anchor = self.focus()
+
+    def shift_up(self, event):
+        item = self.identify('item', event.x, event.y-self.style.lookup('Treeview', 'rowheight'))
+        self.selection_add(item)
+        self.focus(item)
+
+        return 'break'
 
     def populate(self, parent, data=()):
         for item in data:
@@ -562,10 +587,13 @@ class Treeview(ttk.Treeview):
 
     def bindings_set(self):
         bindings = {
+            # '<Key>': self.key_press,
             '<Escape>': self.tags_reset,
-            # '<ButtonPress-1>': self.single_button_press,
-            # '<Double-Button-1>': self.column_maximize,
-            # '<ButtonRelease-1>': self.button_release,
+            '<Shift-Up>': self.shift_up,
+            '<Control-a>': self.control_a,
+            '<Control-x>': self.cut,
+            '<Control-c>': self.copy,
+            '<Control-v>': self.paste,
             '<ButtonPress-3>': self.popup_menu,
             '<<TreeviewOpen>>': self.set_row_colors,
             '<<TreeviewClose>>': self.set_row_colors,
