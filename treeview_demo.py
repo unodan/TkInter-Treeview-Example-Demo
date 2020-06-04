@@ -310,6 +310,7 @@ class Treeview(ttk.Treeview):
         super().__init__(self.frame, **kwargs)
 
         self.detached = []
+        self.shift = None
         self.popup = None
         self.selected = None
         self.header_height = None
@@ -410,10 +411,10 @@ class Treeview(ttk.Treeview):
         def set_tag(_item, _tag):
             _tag = 'even' if _tag == 'odd' else 'odd'
             self.tag_add(_tag, _item)
+            self.value_update(FIELD_TAGS, str(self.item(_item, 'tags')), _item)
             if int(self.item(_item, 'open')):
                 for node in self.get_children(_item):
                     _tag = set_tag(node, _tag)
-                    self.value_update(FIELD_TAGS, str(self.item(node, 'tags')), node)
             return _tag
 
         exclude = []
@@ -516,7 +517,8 @@ class Treeview(ttk.Treeview):
                 iid = self.insert(
                     self.focus(),
                     text=text,
-                    values=['', now.strftime("%d/%m/%Y %H:%M:%S"), 'Folder', '']
+                    open=True,
+                    values=['', now.strftime("%d/%m/%Y %H:%M:%S"), 'Folder', True, ''],
                 )
                 self.value_update(0, iid, iid)
                 self.item(iid, open=1)
@@ -527,7 +529,7 @@ class Treeview(ttk.Treeview):
             dlg.destroy()
 
         root = self.winfo_toplevel()
-        dlg = AddLeafDialog(root, width=300, height=110, title='Add Folder')
+        dlg = AddNodeDialog(root, width=300, height=110, title='Add Folder')
 
         dlg.button_ok.config(command=ok)
         dlg.button_cancel.config(command=cancel)
@@ -572,6 +574,11 @@ class Treeview(ttk.Treeview):
         self.tags_reset(excluded='copy')
 
     def copy(self, _=None):
+        if not self.shift:
+            for item in self.tag_has('copy'):
+                self.tag_remove('copy', item)
+                self.value_update(FIELD_TAGS, str(self.item(item, 'tags')), item)
+
         self.selected = self.selection()
         for item in self.selected:
             self.tag_add('copy', item)
@@ -629,7 +636,11 @@ class Treeview(ttk.Treeview):
 
     def key_press(self, event):
         if 'Shift' in event.keysym:
-            self.anchor = self.focus()
+            self.shift = True
+
+    def key_release(self, event):
+        if 'Shift' in event.keysym:
+            self.shift = False
 
     def shift_up(self, _):
         print(self.focus())
@@ -708,7 +719,8 @@ class Treeview(ttk.Treeview):
 
     def bindings_set(self):
         bindings = {
-            # '<Key>': self.key_press,
+            '<Key>': self.key_press,
+            '<KeyRelease>': self.key_release,
             '<Escape>': self.tags_reset,
             '<Shift-Up>': self.shift_up,
             '<Shift-Down>': self.shift_down,
