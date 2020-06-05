@@ -7,8 +7,11 @@ from datetime import datetime
 from os import path, makedirs
 ABS_PATH = path.dirname(path.realpath(__file__))
 
-FIELD_OPEN = 3
-FIELD_TAGS = 4
+_TYPE = 0
+_IID = 1
+_OPEN = 2
+_TAGS = 3
+_MODIFIED = 4
 
 
 def dump(data, indent=None):
@@ -84,7 +87,7 @@ class App(tk.Tk):
             self.linespace = font.metrics('linespace')
             rowheight = self.linespace + tv_line_padding
             self.style.configure('Treeview', rowheight=rowheight)
-            self.style.configure('Treeview.Heading', padding=tv_heading_padding)
+            self.style.configure('Treeview.Heading', padding=tv_heading_padding, borderwidth=2)
 
             file = path.join(ABS_PATH, 'treeview.json')
             if path.exists(file):
@@ -96,38 +99,38 @@ class App(tk.Tk):
                 data = {
                     'headings': (
                         {'text': 'Name', 'anchor': tk.W},
-                        {'text': 'IID', 'anchor': tk.W},
-                        {'text': 'Date Modified', 'anchor': tk.W},
                         {'text': 'Type', 'anchor': tk.W},
+                        {'text': 'IID', 'anchor': tk.W},
                         {'text': 'Open', 'anchor': tk.W},
                         {'text': 'Tags', 'anchor': tk.W},
+                        {'text': 'Last Modified', 'anchor': tk.W},
                     ),
                     'columns': (
                         {'width': 180, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 100, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 100, 'minwidth': 3, 'stretch': tk.YES},
                     ),
                     'data': (
-                        {'text': 'Folder 0', 'open': 1, 'values': ('', dt_string, "Folder", True, ""),
+                        {'text': 'Folder 0', 'open': 1, 'values': ('Folder', '', True, '', dt_string),
                          'children': (
-                             {'text': 'photo1.png', 'values': ('', dt_string, 'Item', "", "")},
-                             {'text': 'photo2.png', 'values': ('', dt_string, 'Item', "", "")},
-                             {'text': 'photo3.png', 'values': ('', dt_string, 'Item', "", "")},
-                             {'text': 'Folder 0_1', 'open': 1, 'values': ('', dt_string, "Folder", False, ""),
+                             {'text': 'photo1.png', 'values': ('Item', '', '', '', dt_string)},
+                             {'text': 'photo2.png', 'values': ('Item', '', '', '', dt_string)},
+                             {'text': 'photo3.png', 'values': ('Item', '', '', '', dt_string)},
+                             {'text': 'Folder 0_1', 'open': 1, 'values': ('Folder', '', True, '', dt_string),
                               'children': (
-                                  {'text': 'photo1.png', 'values': ('', dt_string, 'Item', "", "")},
-                                  {'text': 'photo2.png', 'values': ('', dt_string, 'Item', "", "")},
-                                  {'text': 'photo3.png', 'values': ('', dt_string, 'Item', "", "")},
+                                  {'text': 'photo1.png', 'values': ('Item', '', '', '', dt_string)},
+                                  {'text': 'photo2.png', 'values': ('Item', '', '', '', dt_string)},
+                                  {'text': 'photo3.png', 'values': ('Item', '', '', '', dt_string)},
                               )},
                          )},
-                        {'text': 'Folder 1', 'open': 1, 'values': ('', dt_string, "Folder", True, ""),
+                        {'text': 'Folder 1', 'open': 1, 'values': ('Folder', '', True, '', dt_string),
                          'children': (
-                             {'text': 'photo4.png', 'values': ('', dt_string, 'Item', "", "")},
-                             {'text': 'photo5.png', 'values': ('', dt_string, 'Item', "", "")},
-                             {'text': 'photo6.png', 'values': ('', dt_string, 'Item', "", "")},
+                             {'text': 'photo4.png', 'values': ('Item', '', '', '', dt_string)},
+                             {'text': 'photo5.png', 'values': ('Item', '', '', '', dt_string)},
+                             {'text': 'photo6.png', 'values': ('Item', '', '', '', dt_string)},
                          )},
                     )
                 }
@@ -314,6 +317,7 @@ class Treeview(ttk.Treeview):
         self.popup = None
         self.selected = None
         self.header_height = None
+        self.origin = None
 
         self.style = ttk.Style()
 
@@ -327,6 +331,7 @@ class Treeview(ttk.Treeview):
         self.frame.grid(sticky=tk.NSEW)
 
         self.focus_set()
+        self.origin = None
         self.focus('I001')
         self.selection_set('I001')
 
@@ -348,8 +353,6 @@ class Treeview(ttk.Treeview):
             popup.add_command(label="Paste", command=self.paste)
             popup.add_separator()
             popup.add_command(label="Delete", command=self.delete)
-            popup.add_separator()
-            popup.add_command(label="Rename", )
 
             create_new.add_command(label="Item", command=self.add_leaf)
             create_new.add_separator()
@@ -411,7 +414,7 @@ class Treeview(ttk.Treeview):
         def set_tag(_item, _tag):
             _tag = 'even' if _tag == 'odd' else 'odd'
             self.tag_add(_tag, _item)
-            self.value_update(FIELD_TAGS, str(self.item(_item, 'tags')), _item)
+            self.value_update(_TAGS, str(self.item(_item, 'tags')), _item)
             if int(self.item(_item, 'open')):
                 for node in self.get_children(_item):
                     _tag = set_tag(node, _tag)
@@ -430,7 +433,10 @@ class Treeview(ttk.Treeview):
         for item in self.get_children():
             reset(item)
             tag = set_tag(item, tag)
-            self.value_update(FIELD_TAGS, str(self.item(item, 'tags')), item)
+            self.value_update(_TAGS, str(self.item(item, 'tags')), item)
+
+        self.selection_remove(*self.selection())
+        self.selection_set(self.focus())
 
     def tag_replace(self, old, new, item=None):
         for item in (item,) if item else self.tag_has(old):
@@ -487,9 +493,9 @@ class Treeview(ttk.Treeview):
                 iid = self.insert(
                     self.focus(),
                     text=text,
-                    values=['', now.strftime("%d/%m/%Y %H:%M:%S"), 'Item', '', '']
+                    values=['Item', '', '', '', now.strftime("%d/%m/%Y %H:%M:%S")]
                 )
-                self.value_update(0, iid, iid)
+                self.value_update(_IID, iid, iid)
                 self.tags_reset()
             dlg.destroy()
 
@@ -518,9 +524,9 @@ class Treeview(ttk.Treeview):
                     self.focus(),
                     text=text,
                     open=True,
-                    values=['', now.strftime("%d/%m/%Y %H:%M:%S"), 'Folder', True, ''],
+                    values=['Folder', '', True, '', now.strftime("%d/%m/%Y %H:%M:%S")],
                 )
-                self.value_update(0, iid, iid)
+                self.value_update(_IID, iid, iid)
                 self.item(iid, open=1)
                 self.tags_reset()
             dlg.destroy()
@@ -541,19 +547,26 @@ class Treeview(ttk.Treeview):
 
         root.wait_window(self)
 
+    def select(self, _):
+        item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery() - self.winfo_rooty())
+        self.focus(item)
+
     def expand(self, _):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_update(FIELD_OPEN, True, item)
-            self.tags_reset(excluded='copy')
+            self.value_update(_OPEN, True, item)
+            self.tags_reset(excluded='selected')
         self.after(1, func)
 
     def collapse(self, _=None):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_update(FIELD_OPEN, False, item)
-            self.tags_reset(excluded='copy')
+            self.value_update(_OPEN, False, item)
+            self.tags_reset(excluded='selected')
         self.after(1, func)
+
+    def button_release(self, event):
+        self.focus(self.identify('item', event.x, event.y))
 
     def cut(self, _=None):
         selections = list(self.selection())
@@ -562,7 +575,7 @@ class Treeview(ttk.Treeview):
                 selections.pop(selections.index(item))
 
         def walk(_item):
-            self.tag_add('copy', _item)
+            self.tag_add('selected', _item)
             for _item in self.get_children(_item):
                 walk(_item)
 
@@ -571,56 +584,63 @@ class Treeview(ttk.Treeview):
 
         self.detach(*selections)
         self.detached = selections
-        self.tags_reset(excluded='copy')
+        self.tags_reset(excluded='selected')
 
     def copy(self, _=None):
-        if not self.shift:
-            for item in self.tag_has('copy'):
-                self.tag_remove('copy', item)
-                self.value_update(FIELD_TAGS, str(self.item(item, 'tags')), item)
+        def walk(_item, copy_all=False):
+            self.selected.append(_item)
+            self.tag_add('selected', _item)
+            self.value_update(_TAGS, str(self.item(_item, 'tags')), _item)
+            if not self.item(_item, 'open') or copy_all:
+                for node in self.get_children(_item):
+                    walk(node, True)
 
-        self.selected = self.selection()
-        for item in self.selected:
-            self.tag_add('copy', item)
-            self.value_update(FIELD_TAGS, str(self.item(item, 'tags')), item)
+        if not self.shift:
+            for item in self.tag_has('selected'):
+                self.tag_remove('selected', item)
+                self.value_update(_TAGS, str(self.item(item, 'tags')), item)
+
+        self.selected = []
+        for item in self.selection():
+            walk(item)
+
+    def undo(self, _=None):
+        print(_)
+        self.reattach(*self.detached)
 
     def paste(self, _=None):
         selections = self.detached if self.detached else self.selected
 
         if not self.selected and not self.detached:
-            selections = self.tag_has('copy')
+            selections = self.tag_has('selected')
 
-        if not len(selections):
-            return
+        for dst_item in self.selection():
+            if not len(selections) or self.value_get(_TYPE, dst_item) != 'Folder':
+                continue
 
-        now = datetime.now()
-        parent = self.focus()
-        dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+            if self.detached:
+                for item in selections:
+                    self.reattach(item, dst_item, tk.END)
+                self.detached = False
+            else:
+                selected = {}
+                for item in selections:
+                    parent = self.parent(item)
+                    dst = selected[parent] if parent in selected else dst_item
+                    self.value_update(_MODIFIED, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), item)
 
-        if self.detached:
-            for item in selections:
-                self.reattach(item, parent, tk.END)
-            self.detached = False
-        else:
-            cr = {}  # Cross reference.
-            for item in selections:
-                ancestor = self.parent(item)
-                dst = cr[ancestor] if ancestor in cr else parent
-                self.value_update(1, dt_string, item)
-                iid = self.insert(dst, **self.item(item))
-                self.value_update(0, iid, iid)
+                    iid = self.insert(dst, **self.item(item))
+                    self.value_update(_IID, iid, iid)
+                    self.tag_remove('selected', iid)
+                    selected[item] = iid
 
-                self.tag_remove('copy', iid)
-                cr[item] = iid
-
-        self.tags_reset(excluded='copy')
-        self.selection_remove(self.tag_has('copy'))
-        self.selection_set(self.focus())
-        self.reindex()
+            self.tags_reset(excluded='selected')
+            self.selection_remove(self.tag_has('selected'))
+            self.selection_set(self.focus())
 
     def delete(self):
         super(Treeview, self).delete(*self.selection())
-        self.tags_reset(excluded='copy')
+        self.tags_reset(excluded='selected')
 
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
@@ -637,38 +657,72 @@ class Treeview(ttk.Treeview):
     def key_press(self, event):
         if 'Shift' in event.keysym:
             self.shift = True
+            if not self.origin:
+                self.origin = self.focus()
+        else:
+            self.origin = None
 
     def key_release(self, event):
         if 'Shift' in event.keysym:
             self.shift = False
+            # self.origin = None
 
     def shift_up(self, _):
-        print(self.focus())
+        rowheight = self.style.lookup('Treeview', 'rowheight')
+        padding = int(str(self.style.lookup('Treeview.Heading', 'padding')[0])) * 2
+        borderwidth = self.style.lookup('Treeview.Heading', 'borderwidth') * 2
+
+        item = self.focus()
+        x, y, _, _ = self.bbox(item)
+        x += self.winfo_rootx()
+
+        _, ay, _, _ = self.bbox(item)
+        _, oy, _, _ = self.bbox(self.origin)
+
+        header_height = borderwidth+padding+rowheight
+        y -= (self.winfo_rooty()-header_height-rowheight)
+
+        if ay > oy:
+            self.selection_toggle(item)
+            self.focus(self.identify('item', x, y))
+        else:
+            item = self.identify('item', x, y)
+            if item and item != self.origin:
+                self.focus(item)
+                self.selection_toggle(item)
 
         return 'break'
 
     def shift_down(self, _):
+        rowheight = self.style.lookup('Treeview', 'rowheight')
+        padding = int(str(self.style.lookup('Treeview.Heading', 'padding')[0])) * 2
+        borderwidth = self.style.lookup('Treeview.Heading', 'borderwidth') * 2
+
         item = self.focus()
-        if self.item(item, 'open'):
-            children = self.get_children(item)
-            if children:
-                item = self.get_children(item)[0]
-        elif self.next(item):
-            item = self.next(item)
+        x, y, _, _ = self.bbox(item)
+        x += self.winfo_rootx()
+
+        _, ay, _, _ = self.bbox(item)
+        _, oy, _, _ = self.bbox(self.origin)
+
+        header_height = borderwidth+padding+rowheight
+        y += (self.winfo_rooty()-header_height)
+
+        if ay < oy:
+            self.selection_toggle(item)
+            self.focus(self.identify('item', x, y))
         else:
-            print(555555555555555555)
-
-        self.focus(item)
-        self.selection_add(item)
-
-        print(item)
+            item = self.identify('item', x, y)
+            if item and item != self.origin:
+                self.focus(item)
+                self.selection_toggle(item)
 
         return 'break'
 
     def populate(self, parent, data=()):
         for item in data:
             iid = self.insert(parent, tk.END, **item)
-            self.value_update(0, iid, iid)
+            self.value_update(_IID, iid, iid)
 
             if 'children' in item:
                 self.populate(iid, item['children'])
@@ -701,15 +755,6 @@ class Treeview(ttk.Treeview):
 
         return data
 
-    def reindex(self):
-        def walk(_item):
-            self.value_update(0, _item, _item)
-            for node in self.get_children(_item):
-                walk(node)
-
-        for item in self.get_children():
-            walk(item)
-
     def popup_menu(self, event):
         self.popup.x, self.popup.y = event.x_root, event.y_root
         item = self.identify('item', event.x, event.y)
@@ -721,6 +766,7 @@ class Treeview(ttk.Treeview):
         bindings = {
             '<Key>': self.key_press,
             '<KeyRelease>': self.key_release,
+            '<ButtonRelease-1>': self.button_release,
             '<Escape>': self.tags_reset,
             '<Shift-Up>': self.shift_up,
             '<Shift-Down>': self.shift_down,
@@ -728,7 +774,9 @@ class Treeview(ttk.Treeview):
             '<Control-x>': self.cut,
             '<Control-c>': self.copy,
             '<Control-v>': self.paste,
+            '<Control-z>': self.undo,
             '<ButtonPress-3>': self.popup_menu,
+            # '<<TreeviewSelect>>': self.select,
             '<<TreeviewOpen>>': self.expand,
             '<<TreeviewClose>>': self.collapse,
         }
