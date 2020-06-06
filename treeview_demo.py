@@ -140,12 +140,17 @@ class App(tk.Tk):
 
             settings = dict(self.app_data['treeview']['settings'])
 
-            node = settings.get('focus', None)
-            if not node and tree.get_children():
-                node = tree.get_children()[0]
+            item = settings.get('focus', None)
+            if (not item or not tree.exists(item)) and tree.get_children():
+                item = tree.get_children()[0]
 
-            tree.focus(node)
-            tree.selection_add(node)
+            view = settings.get('view', None)
+            if view:
+                self.treeview.xview('moveto', view[0])
+                self.treeview.yview('moveto', view[1])
+
+            tree.focus(item)
+            tree.selection_add(item)
             tree.grid(sticky=tk.NSEW, row=0, column=0)
 
         setup_app()
@@ -156,7 +161,9 @@ class App(tk.Tk):
     def exit(self):
         self.app_data.update({'geometry': self.geometry()})
         settings = dict(self.app_data['treeview']['settings'])
+        settings['view'] = (self.treeview.xview()[0], self.treeview.yview()[0])
         settings['focus'] = self.treeview.focus()
+
         self.app_data['treeview']['settings'] = tuple(settings.items())
 
         self.save()
@@ -329,10 +336,9 @@ class Treeview(ttk.Treeview):
         self.undo_data = {}
         self.shift = \
             self.popup = \
-            self.origin = \
             self.selected = \
             self.header_height = \
-            self.origin = None
+            self.cursor_offset = None
 
         self.style = ttk.Style()
 
@@ -374,7 +380,7 @@ class Treeview(ttk.Treeview):
             if scroll_x:
                 sb_x = Scrollbar(self.frame)
                 sb_x.configure(command=self.xview, orient=tk.HORIZONTAL)
-                sb_x.grid(sticky=tk.NSEW, row=980, column=0, columnspan=1000)
+                sb_x.grid(sticky=tk.NSEW, row=980, column=0)
                 self.configure(xscrollcommand=sb_x.set)
 
             if scroll_y:
@@ -579,30 +585,36 @@ class Treeview(ttk.Treeview):
         self.focus(self.identify('item', event.x, event.y))
 
     def cut(self, _=None):
+        def set_selections(_item):
+            self.tag_add('selected', _item)
+            for _item in self.get_children(_item):
+                set_selections(_item)
+
         selections = list(self.selection())
         for item in reversed(selections):
             if self.parent(item) in selections:
                 selections.pop(selections.index(item))
 
-        def walk(_item):
-            self.tag_add('selected', _item)
-            for _item in self.get_children(_item):
-                walk(_item)
-
         for item in selections:
-            walk(item)
+            set_selections(item)
 
-        _prev = self.parent(self.focus())
-        if _prev:
-            self.focus(_prev)
-            self.selection_add(_prev)
+        item = self.focus()
+        parent = self.parent(item)
+        item = self.prev(item)
+        if not item:
+            item = parent if parent else ''
+            if not item and self.get_children():
+                item = self.get_children()[0]
 
         self.undo_data = {}
-        for item in selections:
-            self.undo_data[self.index(item)] = (item, self.parent(item))
+        for node in selections:
+            self.undo_data[node] = (self.parent(node), self.index(node))
 
         self.detach(*selections)
         self.detached = selections
+
+        self.focus(item)
+        self.selection_add(item)
         self.tags_reset(excluded='selected')
 
     def copy(self, _=None):
@@ -624,9 +636,9 @@ class Treeview(ttk.Treeview):
             walk(item)
 
     def undo(self, _=None):
-        for idx, item in self.undo_data.items():
-            self.reattach(item[0], item[1], idx)
-            self.selection_remove(item[0])
+        for item, (parent, idx) in self.undo_data.items():
+            self.reattach(item, parent, idx)
+            self.selection_remove(item)
         self.tags_reset()
 
     def paste(self, _=None):
@@ -664,9 +676,18 @@ class Treeview(ttk.Treeview):
 
         self.undo_data = {}
         for item in selections:
-            self.undo_data[self.index(item)] = (item, self.parent(item))
+            self.undo_data[item] = (self.parent(item), self.index(item))
+
+        item = self.focus()
+        parent = self.parent(item)
+        item = self.prev(item)
+        if not item:
+            item = parent if parent else ''
 
         super(Treeview, self).detach(*self.selection())
+
+        self.focus(item)
+        self.selection_add(item)
         self.tags_reset(excluded='selected')
 
     def insert(self, parent, index=tk.END, **kwargs):
@@ -684,56 +705,53 @@ class Treeview(ttk.Treeview):
     def key_press(self, event):
         if 'Shift' in event.keysym:
             self.shift = True
-            if not self.origin:
-                self.origin = self.focus()
-        else:
-            self.origin = None
+            self.cursor_offset = 0
 
     def key_release(self, event):
         if 'Shift' in event.keysym:
             self.shift = False
-            # self.origin = None
 
     def shift_up(self, _):
         rowheight = self.style.lookup('Treeview', 'rowheight')
 
-        item = self.focus()
-        print(item)
-        x, y, _, _ = self.bbox(item)
+        focus = self.focus()
+        x, y, _, _ = self.bbox(focus)
         x += self.winfo_rootx()
 
-        _, oy, _, _ = self.bbox(self.origin)
-        y = y-rowheight+1
+        _prev = self.identify('item', x, y-rowheight+1)
+        if not _prev:
+            return
 
-        if y > oy:
-            self.selection_toggle(item)
-            self.focus(self.identify('item', x, y))
+        self.see(_prev)
+        self.focus(_prev)
+        self.cursor_offset += 1
+
+        if self.cursor_offset > 0:
+            self.selection_toggle(_prev)
         else:
-            item = self.identify('item', x, y)
-            if item and item != self.origin:
-                self.focus(item)
-                self.selection_toggle(item)
+            self.selection_toggle(focus)
 
         return 'break'
 
     def shift_down(self, _):
         rowheight = self.style.lookup('Treeview', 'rowheight')
 
-        item = self.focus()
-        x, y, _, _ = self.bbox(item)
+        focus = self.focus()
+        x, y, _, _ = self.bbox(focus)
         x += self.winfo_rootx()
 
-        _, oy, _, _ = self.bbox(self.origin)
-        y = y+rowheight+1
+        _next = self.identify('item', x, y+rowheight+1)
+        if not _next:
+            return
 
-        if y-1 <= oy:
-            self.selection_toggle(item)
-            self.focus(self.identify('item', x, y))
+        self.see(_next)
+        self.focus(_next)
+        self.cursor_offset -= 1
+
+        if self.cursor_offset >= 0:
+            self.selection_toggle(focus)
         else:
-            item = self.identify('item', x, y)
-            if item and item != self.origin:
-                self.focus(item)
-                self.selection_toggle(item)
+            self.selection_toggle(_next)
 
         return 'break'
 
