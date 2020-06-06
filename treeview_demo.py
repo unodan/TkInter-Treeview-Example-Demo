@@ -696,20 +696,16 @@ class Treeview(ttk.Treeview):
 
     def shift_up(self, _):
         rowheight = self.style.lookup('Treeview', 'rowheight')
-        padding = int(str(self.style.lookup('Treeview.Heading', 'padding')[0])) * 2
-        borderwidth = self.style.lookup('Treeview.Heading', 'borderwidth') * 2
 
         item = self.focus()
+        print(item)
         x, y, _, _ = self.bbox(item)
         x += self.winfo_rootx()
 
-        _, ay, _, _ = self.bbox(item)
         _, oy, _, _ = self.bbox(self.origin)
+        y = y-rowheight+1
 
-        header_height = borderwidth+padding+rowheight
-        y -= (self.winfo_rooty()-header_height-rowheight)
-
-        if ay > oy:
+        if y > oy:
             self.selection_toggle(item)
             self.focus(self.identify('item', x, y))
         else:
@@ -722,20 +718,15 @@ class Treeview(ttk.Treeview):
 
     def shift_down(self, _):
         rowheight = self.style.lookup('Treeview', 'rowheight')
-        padding = int(str(self.style.lookup('Treeview.Heading', 'padding')[0])) * 2
-        borderwidth = self.style.lookup('Treeview.Heading', 'borderwidth') * 2
 
         item = self.focus()
         x, y, _, _ = self.bbox(item)
         x += self.winfo_rootx()
 
-        _, ay, _, _ = self.bbox(item)
         _, oy, _, _ = self.bbox(self.origin)
+        y = y+rowheight+1
 
-        header_height = borderwidth+padding+rowheight
-        y += (self.winfo_rooty()-header_height)
-
-        if ay < oy:
+        if y-1 <= oy:
             self.selection_toggle(item)
             self.focus(self.identify('item', x, y))
         else:
