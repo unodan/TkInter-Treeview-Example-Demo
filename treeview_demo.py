@@ -372,7 +372,7 @@ class Treeview(ttk.Treeview):
 
             create_new.add_command(label="Item", command=self.add_leaf)
             create_new.add_separator()
-            create_new.add_command(label="Folder", command=self.add_folder)
+            create_new.add_command(label="Folder", command=self.add_node)
 
         def set_scrollbars():
             scroll_x, scroll_y = self.scroll
@@ -430,7 +430,7 @@ class Treeview(ttk.Treeview):
         def set_tag(_item, _tag):
             _tag = 'even' if _tag == 'odd' else 'odd'
             self.tag_add(_tag, _item)
-            self.value_update(_TAGS, str(self.item(_item, 'tags')), _item)
+            self.value_set(_TAGS, str(self.item(_item, 'tags')), _item)
             if int(self.item(_item, 'open')):
                 for node in self.get_children(_item):
                     _tag = set_tag(node, _tag)
@@ -449,7 +449,7 @@ class Treeview(ttk.Treeview):
         for item in self.get_children():
             reset(item)
             tag = set_tag(item, tag)
-            self.value_update(_TAGS, str(self.item(item, 'tags')), item)
+            self.value_set(_TAGS, str(self.item(item, 'tags')), item)
 
         self.selection_remove(*self.selection())
         self.selection_set(self.focus())
@@ -496,7 +496,7 @@ class Treeview(ttk.Treeview):
         if 0 <= idx <= len(values):
             return values[idx]
 
-    def value_update(self, idx, value, item):
+    def value_set(self, idx, value, item):
         values = list(self.item(item, 'values'))
         values[idx] = value
         self.item(item, values=values)
@@ -511,7 +511,7 @@ class Treeview(ttk.Treeview):
                     text=text,
                     values=['Item', '', '', '', now.strftime("%d/%m/%Y %H:%M:%S")]
                 )
-                self.value_update(_IID, iid, iid)
+                self.value_set(_IID, iid, iid)
                 self.tags_reset()
             dlg.destroy()
 
@@ -531,7 +531,7 @@ class Treeview(ttk.Treeview):
 
         root.wait_window(self)
 
-    def add_folder(self):
+    def add_node(self):
         def ok():
             text = dlg.entry.get().strip(' ')
             if text:
@@ -542,7 +542,7 @@ class Treeview(ttk.Treeview):
                     open=True,
                     values=['Folder', '', True, '', now.strftime("%d/%m/%Y %H:%M:%S")],
                 )
-                self.value_update(_IID, iid, iid)
+                self.value_set(_IID, iid, iid)
                 self.item(iid, open=1)
                 self.tags_reset()
             dlg.destroy()
@@ -570,14 +570,14 @@ class Treeview(ttk.Treeview):
     def expand(self, _):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_update(_OPEN, True, item)
+            self.value_set(_OPEN, True, item)
             self.tags_reset(excluded='selected')
         self.after(1, func)
 
     def collapse(self, _=None):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_update(_OPEN, False, item)
+            self.value_set(_OPEN, False, item)
             self.tags_reset(excluded='selected')
         self.after(1, func)
 
@@ -618,22 +618,22 @@ class Treeview(ttk.Treeview):
         self.tags_reset(excluded='selected')
 
     def copy(self, _=None):
-        def walk(_item, copy_all=False):
+        def set_selected(_item, copy_all=False):
             self.selected.append(_item)
             self.tag_add('selected', _item)
-            self.value_update(_TAGS, str(self.item(_item, 'tags')), _item)
+            self.value_set(_TAGS, str(self.item(_item, 'tags')), _item)
             if not self.item(_item, 'open') or copy_all:
                 for node in self.get_children(_item):
-                    walk(node, True)
+                    set_selected(node, True)
 
         if not self.shift:
             for item in self.tag_has('selected'):
                 self.tag_remove('selected', item)
-                self.value_update(_TAGS, str(self.item(item, 'tags')), item)
+                self.value_set(_TAGS, str(self.item(item, 'tags')), item)
 
         self.selected = []
         for item in self.selection():
-            walk(item)
+            set_selected(item)
 
     def undo(self, _=None):
         for item, (parent, idx) in self.undo_data.items():
@@ -660,10 +660,10 @@ class Treeview(ttk.Treeview):
                 for item in selections:
                     parent = self.parent(item)
                     dst = selected[parent] if parent in selected else dst_item
-                    self.value_update(_MODIFIED, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), item)
+                    self.value_set(_MODIFIED, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), item)
 
                     iid = self.insert(dst, **self.item(item))
-                    self.value_update(_IID, iid, iid)
+                    self.value_set(_IID, iid, iid)
                     self.tag_remove('selected', iid)
                     selected[item] = iid
 
@@ -719,19 +719,17 @@ class Treeview(ttk.Treeview):
         x += self.winfo_rootx()
 
         _prev = self.identify('item', x, y-rowheight+1)
-        if not _prev:
-            return
+        if _prev:
+            self.see(_prev)
+            self.focus(_prev)
+            self.cursor_offset += 1
 
-        self.see(_prev)
-        self.focus(_prev)
-        self.cursor_offset += 1
+            if self.cursor_offset > 0:
+                self.selection_toggle(_prev)
+            else:
+                self.selection_toggle(focus)
 
-        if self.cursor_offset > 0:
-            self.selection_toggle(_prev)
-        else:
-            self.selection_toggle(focus)
-
-        return 'break'
+            return 'break'
 
     def shift_down(self, _):
         rowheight = self.style.lookup('Treeview', 'rowheight')
@@ -741,24 +739,22 @@ class Treeview(ttk.Treeview):
         x += self.winfo_rootx()
 
         _next = self.identify('item', x, y+rowheight+1)
-        if not _next:
-            return
+        if _next:
+            self.see(_next)
+            self.focus(_next)
+            self.cursor_offset -= 1
 
-        self.see(_next)
-        self.focus(_next)
-        self.cursor_offset -= 1
+            if self.cursor_offset >= 0:
+                self.selection_toggle(focus)
+            else:
+                self.selection_toggle(_next)
 
-        if self.cursor_offset >= 0:
-            self.selection_toggle(focus)
-        else:
-            self.selection_toggle(_next)
-
-        return 'break'
+            return 'break'
 
     def populate(self, parent, data=()):
         for item in data:
             iid = self.insert(parent, tk.END, **item)
-            self.value_update(_IID, iid, iid)
+            self.value_set(_IID, iid, iid)
 
             if 'children' in item:
                 self.populate(iid, item['children'])
