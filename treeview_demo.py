@@ -136,6 +136,16 @@ class App(tk.Tk):
                 }
 
             tree = self.treeview = Treeview(self.frame, setup=data)
+            tree.focus_set()
+
+            settings = dict(self.app_data['treeview']['settings'])
+
+            node = settings.get('focus', None)
+            if not node and tree.get_children():
+                node = tree.get_children()[0]
+
+            tree.focus(node)
+            tree.selection_add(node)
             tree.grid(sticky=tk.NSEW, row=0, column=0)
 
         setup_app()
@@ -145,6 +155,9 @@ class App(tk.Tk):
 
     def exit(self):
         self.app_data.update({'geometry': self.geometry()})
+        settings = dict(self.app_data['treeview']['settings'])
+        settings['focus'] = self.treeview.focus()
+        self.app_data['treeview']['settings'] = tuple(settings.items())
 
         self.save()
         self.destroy()
@@ -313,11 +326,13 @@ class Treeview(ttk.Treeview):
         super().__init__(self.frame, **kwargs)
 
         self.detached = []
-        self.shift = None
-        self.popup = None
-        self.selected = None
-        self.header_height = None
-        self.origin = None
+        self.undo_data = {}
+        self.shift = \
+            self.popup = \
+            self.origin = \
+            self.selected = \
+            self.header_height = \
+            self.origin = None
 
         self.style = ttk.Style()
 
@@ -329,11 +344,6 @@ class Treeview(ttk.Treeview):
 
         self.bindings_set()
         self.frame.grid(sticky=tk.NSEW)
-
-        self.focus_set()
-        self.origin = None
-        self.focus('I001')
-        self.selection_set('I001')
 
     def setup(self, data):
         def set_style():
@@ -582,6 +592,15 @@ class Treeview(ttk.Treeview):
         for item in selections:
             walk(item)
 
+        _prev = self.parent(self.focus())
+        if _prev:
+            self.focus(_prev)
+            self.selection_add(_prev)
+
+        self.undo_data = {}
+        for item in selections:
+            self.undo_data[self.index(item)] = (item, self.parent(item))
+
         self.detach(*selections)
         self.detached = selections
         self.tags_reset(excluded='selected')
@@ -605,8 +624,10 @@ class Treeview(ttk.Treeview):
             walk(item)
 
     def undo(self, _=None):
-        print(_)
-        self.reattach(*self.detached)
+        for idx, item in self.undo_data.items():
+            self.reattach(item[0], item[1], idx)
+            self.selection_remove(item[0])
+        self.tags_reset()
 
     def paste(self, _=None):
         selections = self.detached if self.detached else self.selected
@@ -639,7 +660,13 @@ class Treeview(ttk.Treeview):
             self.selection_set(self.focus())
 
     def delete(self):
-        super(Treeview, self).delete(*self.selection())
+        selections = self.selection()
+
+        self.undo_data = {}
+        for item in selections:
+            self.undo_data[self.index(item)] = (item, self.parent(item))
+
+        super(Treeview, self).detach(*self.selection())
         self.tags_reset(excluded='selected')
 
     def insert(self, parent, index=tk.END, **kwargs):
