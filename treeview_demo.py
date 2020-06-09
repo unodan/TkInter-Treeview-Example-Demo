@@ -126,9 +126,7 @@ class App(tk.Tk):
                     'columns': (
                         {'width': 180, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry', 'unique': True},
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE, 'type': 'Combobox',
-                            'values': (' Node ',  ' Leaf '),
-                         },
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 100, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
@@ -159,7 +157,6 @@ class App(tk.Tk):
                 }
 
             tree = self.treeview = Treeview(self.frame, setup=data)
-            tree.header_height = tv_heading_padding + tv_heading_border_width * 2 + 1
             tree.focus_set()
 
             settings = dict(self.app_data['treeview']['settings'])
@@ -351,7 +348,8 @@ class Entry(ttk.Entry):
         self.configure(textvariable=self.var)
 
         self.undo_data = {}
-        self.popup = None
+        self.popup = \
+            self.menu_background = None
         self.style = ttk.Style()
 
         self.setup()
@@ -359,58 +357,34 @@ class Entry(ttk.Entry):
 
     def setup(self):
         def set_popup_menu():
-            popup = self.popup = tk.Menu(self.winfo_toplevel(), tearoff=0)
-            popup.add_command(label="Select All", command=lambda: self.event_generate('<Control-a>'))
+            opts = dict(self.style.map('Treeview', 'background'))
+            background = self.style.lookup('Treeview.Heading', 'background')
+
+            popup = self.popup = tk.Menu(
+                self.winfo_toplevel(),
+                tearoff=0,
+                background=background,
+                foreground='#000000',
+                activebackground=opts['selected']
+            )
+
+            popup.add_command(label="Select All", command=self.select_all)
             popup.add_separator()
             popup.add_command(label="Cut", command=lambda: self.event_generate('<Control-x>'))
             popup.add_command(label="Copy", command=lambda: self.event_generate('<Control-c>'))
             popup.add_command(label="Paste", command=lambda: self.event_generate('<Control-v>'))
             popup.add_separator()
-            popup.add_command(label="Delete", command=lambda: self.event_generate('<Delete>'))
+            popup.add_command(label="Delete", command=self.clear)
 
+        self.menu_background = self.style.lookup('TScrollbar.thumb', 'background')
         set_popup_menu()
 
-    # def clear(self):
-    #     self.variable_set('')
-    #
-    # def ctrl_a(self, _):
-    #     if self.select_present():
-    #         self.popup.disable_items('select_all')
-    #
-    #     def func():
-    #         self.select_range(0, 'end')
-    #         self.icursor('end')
-    #     self.after(1, func)
-    #
-    # def ctrl_c(self, _):
-    #     if self.select_present():
-    #         self.popup.disable_items('select_all')
-    #     self.popup.enable_items('paste')
-    #
-    # def ctrl_x(self, _):
-    #     if self.select_present():
-    #         self.popup.disable_items('select_all')
-    #
-    #     self.popup.enable_items('paste')
-    #     if not self.variable_get():
-    #         self.popup.disable_items(('cut', 'copy'))
-    #
-    # def focus_in(self, event):
-    #     super(Entry, self).focus_in(event)
-    #
-    #     if str(self.cget('state')) == 'readonly':
-    #         self.popup.disable_items(('cut', 'paste'))
-    #     else:
-    #         try:
-    #             self.clipboard_get()
-    #             self.popup.enable_items('paste')
-    #         except TclError:
-    #             pass
-    #
-    #     def update_popup(_a, _b, _c):
-    #         _func = self.popup.enable_items if self.variable_get() else self.popup.disable_items
-    #         _func(['select_all'])
-    #     self.var.trace('w', update_popup)
+    def clear(self):
+        self.delete(0, tk.END)
+
+    def select_all(self):
+        self.select_range(0, tk.END)
+        self.icursor(tk.END)
 
     def popup_menu(self, event):
         if not self.popup:
@@ -420,12 +394,6 @@ class Entry(ttk.Entry):
         wdg.focus_set()
 
         self.popup.tk_popup(event.x_root, event.y_root)
-
-        # if self.select_present():
-        #     self.popup.enable_items(('cut', 'copy', 'delete'))
-        #     self.popup.disable_items('select_all')
-        # else:
-        #     self.popup.disable_items(('cut', 'copy', 'delete'))
 
     def bindings_set(self):
         bindings = {
@@ -440,6 +408,62 @@ class Combobox(ttk.Combobox):
         super().__init__(parent, **kwargs)
         self.var = tk.StringVar()
         self.configure(textvariable=self.var)
+
+        self.popup = \
+            self.menu_background = None
+
+        self.style = ttk.Style()
+
+        self.setup()
+        self.bindings_set()
+
+    def setup(self):
+        def set_popup_menu():
+            opts = dict(self.style.map('Treeview', 'background'))
+            background = self.style.lookup('Treeview.Heading', 'background')
+
+            popup = self.popup = tk.Menu(
+                self.winfo_toplevel(),
+                tearoff=0,
+                background=background,
+                foreground='#000000',
+                activebackground=opts['selected']
+            )
+
+            popup.add_command(label="Select All", command=self.select_all)
+            popup.add_separator()
+            popup.add_command(label="Cut", command=lambda: self.event_generate('<Control-x>'))
+            popup.add_command(label="Copy", command=lambda: self.event_generate('<Control-c>'))
+            popup.add_command(label="Paste", command=lambda: self.event_generate('<Control-v>'))
+            popup.add_separator()
+            popup.add_command(label="Delete", command=lambda: self.clear)
+
+        self.menu_background = self.style.lookup('TScrollbar.thumb', 'background')
+        set_popup_menu()
+
+    def select_all(self):
+        self.select_range(0, tk.END)
+        self.icursor(tk.END)
+
+    def clear(self):
+        print(4444444444)
+        self.var.set('')
+
+    def popup_menu(self, event):
+        if not self.popup:
+            return
+
+        wdg = event.widget
+        wdg.focus_set()
+
+        self.popup.tk_popup(event.x_root, event.y_root)
+
+    def bindings_set(self):
+        bindings = {
+            '<ButtonPress-3>': self.popup_menu,
+        }
+        for command, callback in bindings.items():
+            self.bind(command, callback)
 
 
 class Label(ttk.Label):
@@ -487,8 +511,8 @@ class Treeview(ttk.Treeview):
         setup = kwargs.pop('setup', {})
         data = setup.pop('data', [])
         self.cursor = setup.pop('cursor', [0, 0])
-        self.headings = setup['headings']
         self.columns = setup['columns']
+        self.headings = setup['headings']
         self.scroll = kwargs.pop('scroll', (True, True))
 
         super().__init__(self.frame, **kwargs)
@@ -498,9 +522,8 @@ class Treeview(ttk.Treeview):
         self.shift = \
             self.popup = \
             self.selected = \
-            self.tv_entry = \
+            self.menu_background = \
             self.active_cell = \
-            self.header_height = \
             self.cursor_offset = \
             self.scroll_x = \
             self.scroll_y = None
@@ -525,22 +548,28 @@ class Treeview(ttk.Treeview):
             self.tag_configure('odd', background=background)
             self.tag_configure('even', background='#ffffff')
             self.troughcolor = self.style.lookup('TScrollbar.trough', 'troughcolor')
-            self.thumbcolor = self.style.lookup('TScrollbar.thumb', 'background')
+            self.menu_background = self.style.lookup('TScrollbar.Heading', 'background')
 
         def set_popup_menu():
             opts = dict(self.style.map('Treeview', 'background'))
+            background = self.style.lookup('Treeview.Heading', 'background')
 
             popup = self.popup = tk.Menu(
                 self.winfo_toplevel(),
                 tearoff=0,
-                bg=self.thumbcolor,
-                fg='#000000',
+                background=background,
+                foreground='#000000',
                 activebackground=opts['selected']
             )
-            create_new = tk.Menu(popup, tearoff=0)
+            create_new = tk.Menu(
+                popup,
+                tearoff=0,
+                background=background,
+                foreground='#000000',
+                activebackground=opts['selected']
+            )
 
-            popup.add_cascade(label="Create New", menu=create_new)
-            popup.add_command(label="Insert Item", command=self.insert_item)
+            popup.add_cascade(label="Insert", menu=create_new)
             popup.add_separator()
             popup.add_command(label="Cut", command=self.cut)
             popup.add_command(label="Copy", command=self.copy)
@@ -548,9 +577,9 @@ class Treeview(ttk.Treeview):
             popup.add_separator()
             popup.add_command(label="Delete", command=self.detach)
 
-            create_new.add_command(label="Item", command=self.add_leaf)
+            create_new.add_command(label="Item", command=self.insert_leaf)
             create_new.add_separator()
-            create_new.add_command(label="Folder", command=self.add_node)
+            create_new.add_command(label="Folder", command=self.insert_node)
 
         def set_scrollbars():
             scroll_x, scroll_y = self.scroll
@@ -708,80 +737,6 @@ class Treeview(ttk.Treeview):
 
         root.wait_window(dlg)
 
-    def add_leaf(self):
-        def is_unique(text):
-            results = True
-            for item in self.get_children(self.focus()):
-                if text == self.item(item, 'text'):
-                    results = False
-                    break
-            return results
-
-        def ok():
-            text = dlg.entry.get().strip(' ')
-            if not is_unique(text):
-                dlg2 = MessageDialog(root, width=300, height=110, title='Help!!!!')
-                root.wait_window(self)
-
-            if text:
-                now = datetime.now()
-                iid = self.insert(
-                    self.focus(),
-                    text=text,
-                    values=['', 'Leaf', '', '', now.strftime("%d/%m/%Y %H:%M:%S")]
-                )
-                self.value_set(_IID, iid, iid)
-                self.tags_reset()
-            dlg.destroy()
-
-        def cancel():
-            dlg.destroy()
-
-        root = self.winfo_toplevel()
-        dlg = AddLeafDialog(root, width=300, height=110, title='Add Item')
-
-        dlg.button_ok.config(command=ok)
-        dlg.button_cancel.config(command=cancel)
-        dlg.entry.focus_set()
-        dlg.update_idletasks()
-
-        if hasattr(self.popup, 'x') and hasattr(self.popup, 'y'):
-            dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{self.popup.x}+{self.popup.y}')
-
-        root.wait_window(self)
-
-    def add_node(self):
-        def ok():
-            text = dlg.entry.get().strip(' ')
-            if text:
-                now = datetime.now()
-                iid = self.insert(
-                    self.focus(),
-                    text=text,
-                    open=True,
-                    values=['', 'Node', True, '', now.strftime("%d/%m/%Y %H:%M:%S")],
-                )
-                self.value_set(_IID, iid, iid)
-                self.item(iid, open=1)
-                self.tags_reset()
-            dlg.destroy()
-
-        def cancel():
-            dlg.destroy()
-
-        root = self.winfo_toplevel()
-        dlg = AddNodeDialog(root, width=300, height=110, title='Add Folder')
-
-        dlg.button_ok.config(command=ok)
-        dlg.button_cancel.config(command=cancel)
-        dlg.entry.focus_set()
-        dlg.update_idletasks()
-
-        if hasattr(self.popup, 'x') and hasattr(self.popup, 'y'):
-            dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{self.popup.x}+{self.popup.y}')
-
-        root.wait_window(self)
-
     def select(self, _):
         item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery() - self.winfo_rooty())
         self.focus(item)
@@ -836,16 +791,24 @@ class Treeview(ttk.Treeview):
                 wdg.destroy()
                 self.active_cell = None
 
+            def control_a(_=None):
+                def func():
+                    wdg.select_range(0, tk.END)
+                    wdg.icursor(tk.END)
+                self.after(1, func)
+
             state = '' if mode == tk.WRITABLE else 'readonly'
             values = self.columns[col].get('values', '')
             wdg = Combobox(self, state=state, values=values)
             wdg.place(x=x-1, y=y, anchor='w', width=width)
             wdg.var.set(text)
+            wdg.icursor(tk.END)
 
             wdg.bind('<Return>', enter)
             wdg.bind('<KP_Enter>', enter)
             wdg.bind('<Escape>', destroy)
             wdg.bind('<Control-z>', destroy)
+            wdg.bind('<Control-a>', control_a)
 
         elif _type == 'Entry':
             def enter(_):
@@ -894,33 +857,25 @@ class Treeview(ttk.Treeview):
                     self.delete(item)
                 self.tags_reset()
 
+            def control_a(_=None):
+                def func():
+                    wdg.select_range(0, tk.END)
+                    wdg.icursor(tk.END)
+                self.after(1, func)
+
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
                 wdg.place(x=x-1, y=y, anchor='w', width=width)
                 wdg.var.set(text)
-                opts = dict(self.style.map('Treeview', 'background'))
-
-                print(self.style.element_options("TEntry.background"))
+                wdg.icursor(tk.END)
 
                 wdg.bind('<Return>', enter)
                 wdg.bind('<KP_Enter>', enter)
                 wdg.bind('<Escape>', destroy)
                 wdg.bind('<Control-z>', destroy)
+                wdg.bind('<Control-a>', control_a)
 
         return wdg
-
-    def double_click(self, event):
-        row = self.identify_row(event.y)
-        column = self.identify_column(event.x)
-
-        self.active_cell = self.widget_popup(row, column)
-        if self.active_cell:
-            self.active_cell.column = column
-            self.active_cell.focus()
-            if isinstance(self.active_cell, Entry):
-                self.active_cell.select_range(0, tk.END)
-
-        return 'break'
 
     def wheel_mouse(self, event):
         if self.active_cell:
@@ -935,7 +890,7 @@ class Treeview(ttk.Treeview):
 
         return 'break'
 
-    def button_press(self, _):
+    def single_click(self, _):
         if self.active_cell:
             item = self.focus()
             item_text = self.item(item, 'text')
@@ -979,6 +934,19 @@ class Treeview(ttk.Treeview):
 
             self.active_cell = None
             self.tags_reset()
+
+    def double_click(self, event):
+        row = self.identify_row(event.y)
+        column = self.identify_column(event.x)
+
+        self.active_cell = self.widget_popup(row, column)
+        if self.active_cell:
+            self.active_cell.column = column
+            self.active_cell.focus()
+            if isinstance(self.active_cell, Entry):
+                self.active_cell.select_range(0, tk.END)
+
+        return 'break'
 
     def button_release(self, event):
         self.focus(self.identify('item', event.x, event.y))
@@ -1086,9 +1054,11 @@ class Treeview(ttk.Treeview):
 
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
-        return super(Treeview, self).insert(parent, index, **kwargs)
+        iid = super(Treeview, self).insert(parent, index, **kwargs)
+        self.see(iid)
+        return iid
 
-    def insert_item(self):
+    def insert_leaf(self):
         item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
 
         if not item:
@@ -1105,6 +1075,37 @@ class Treeview(ttk.Treeview):
             parent,
             idx,
             values=['', 'Leaf', '', '', datetime.now().strftime("%d/%m/%Y %H:%M:%S"), '']
+        )
+
+        self.focus(iid)
+        self.value_set(_IID, iid, iid)
+        self.tags_reset()
+
+        bbox = self.bbox(iid, '#0')
+        if bbox:
+            event = Event()
+            event.x = bbox[0]
+            event.y = bbox[1] + self.rowheight
+            self.double_click(event)
+
+    def insert_node(self):
+        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
+
+        if not item:
+            parent = ''
+            idx = tk.END
+        elif self.value_get(_TYPE, item) == 'Node':
+            idx = 0
+            parent = item
+        else:
+            idx = self.index(item) + 1
+            parent = self.parent(item)
+
+        iid = self.insert(
+            parent,
+            idx,
+            open=True,
+            values=['', 'Node', '', '', datetime.now().strftime("%d/%m/%Y %H:%M:%S"), '']
         )
 
         self.focus(iid)
@@ -1242,7 +1243,7 @@ class Treeview(ttk.Treeview):
             '<Key>': self.key_press,
             '<KeyRelease>': self.key_release,
             '<Double-Button-1>': self.double_click,
-            '<Button-1>': self.button_press,
+            '<Button-1>': self.single_click,
             '<Button-4>': self.wheel_mouse,
             '<Button-5>': self.wheel_mouse,
             '<ButtonRelease-1>': self.button_release,
