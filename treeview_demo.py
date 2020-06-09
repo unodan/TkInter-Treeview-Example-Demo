@@ -12,6 +12,7 @@ _TYPE = 1
 _OPEN = 2
 _TAGS = 3
 _MODIFIED = 4
+_DATA1 = 5
 
 
 def dump(data, indent=None):
@@ -93,6 +94,18 @@ class App(tk.Tk):
             self.style.configure('Treeview.Heading', padding=tv_heading_padding, borderwidth=tv_heading_border_width)
             self.style.configure('Treeview', indent=tv_indent)
 
+            self.style.configure('TEntry', selectbackground='#0081c1')
+            self.style.map('Treeview', background=[('selected', '#0081c1')])
+
+            self.style.configure('TCombobox', selectbackground='#0081c1')
+            self.style.map(
+                'TCombobox',
+                foreground=[('readonly', 'white')],
+                fieldbackground=[('readonly', '#0081c1')],
+            )
+            self.option_add("*TCombobox*Listbox*Background", 'white')
+            self.option_add("*TCombobox*Listbox*Foreground", '#000000')
+
             file = path.join(ABS_PATH, 'treeview.json')
             if path.exists(file):
                 with open(file) as f:
@@ -113,12 +126,14 @@ class App(tk.Tk):
                     'columns': (
                         {'width': 180, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry', 'unique': True},
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE, 'type': 'Combobox',
+                            'values': (' Node ',  ' Leaf '),
+                         },
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 100, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
-                            'values': ('',  ' Value 1 ', ' Value 2 ', ' Value 3 ', ' Value 4 ', ' Value 5 '),
+                            'values': (' Value 1 ', ' Value 2 ', ' Value 3 ', ' Value 4 ', ' Value 5 '),
                          },
                     ),
                     'data': (
@@ -335,6 +350,90 @@ class Entry(ttk.Entry):
         self.var = tk.StringVar()
         self.configure(textvariable=self.var)
 
+        self.undo_data = {}
+        self.popup = None
+        self.style = ttk.Style()
+
+        self.setup()
+        self.bindings_set()
+
+    def setup(self):
+        def set_popup_menu():
+            popup = self.popup = tk.Menu(self.winfo_toplevel(), tearoff=0)
+            popup.add_command(label="Select All", command=lambda: self.event_generate('<Control-a>'))
+            popup.add_separator()
+            popup.add_command(label="Cut", command=lambda: self.event_generate('<Control-x>'))
+            popup.add_command(label="Copy", command=lambda: self.event_generate('<Control-c>'))
+            popup.add_command(label="Paste", command=lambda: self.event_generate('<Control-v>'))
+            popup.add_separator()
+            popup.add_command(label="Delete", command=lambda: self.event_generate('<Delete>'))
+
+        set_popup_menu()
+
+    # def clear(self):
+    #     self.variable_set('')
+    #
+    # def ctrl_a(self, _):
+    #     if self.select_present():
+    #         self.popup.disable_items('select_all')
+    #
+    #     def func():
+    #         self.select_range(0, 'end')
+    #         self.icursor('end')
+    #     self.after(1, func)
+    #
+    # def ctrl_c(self, _):
+    #     if self.select_present():
+    #         self.popup.disable_items('select_all')
+    #     self.popup.enable_items('paste')
+    #
+    # def ctrl_x(self, _):
+    #     if self.select_present():
+    #         self.popup.disable_items('select_all')
+    #
+    #     self.popup.enable_items('paste')
+    #     if not self.variable_get():
+    #         self.popup.disable_items(('cut', 'copy'))
+    #
+    # def focus_in(self, event):
+    #     super(Entry, self).focus_in(event)
+    #
+    #     if str(self.cget('state')) == 'readonly':
+    #         self.popup.disable_items(('cut', 'paste'))
+    #     else:
+    #         try:
+    #             self.clipboard_get()
+    #             self.popup.enable_items('paste')
+    #         except TclError:
+    #             pass
+    #
+    #     def update_popup(_a, _b, _c):
+    #         _func = self.popup.enable_items if self.variable_get() else self.popup.disable_items
+    #         _func(['select_all'])
+    #     self.var.trace('w', update_popup)
+
+    def popup_menu(self, event):
+        if not self.popup:
+            return
+
+        wdg = event.widget
+        wdg.focus_set()
+
+        self.popup.tk_popup(event.x_root, event.y_root)
+
+        # if self.select_present():
+        #     self.popup.enable_items(('cut', 'copy', 'delete'))
+        #     self.popup.disable_items('select_all')
+        # else:
+        #     self.popup.disable_items(('cut', 'copy', 'delete'))
+
+    def bindings_set(self):
+        bindings = {
+            '<ButtonPress-3>': self.popup_menu,
+        }
+        for command, callback in bindings.items():
+            self.bind(command, callback)
+
 
 class Combobox(ttk.Combobox):
     def __init__(self, parent, **kwargs):
@@ -416,7 +515,6 @@ class Treeview(ttk.Treeview):
 
         self.indent = self.style.lookup('Treeview', 'indent')
         self.rowheight = self.style.lookup('Treeview', 'rowheight')
-
         self.bindings_set()
         self.frame.grid(sticky=tk.NSEW)
 
@@ -426,9 +524,19 @@ class Treeview(ttk.Treeview):
 
             self.tag_configure('odd', background=background)
             self.tag_configure('even', background='#ffffff')
+            self.troughcolor = self.style.lookup('TScrollbar.trough', 'troughcolor')
+            self.thumbcolor = self.style.lookup('TScrollbar.thumb', 'background')
 
         def set_popup_menu():
-            popup = self.popup = tk.Menu(self.winfo_toplevel(), tearoff=0)
+            opts = dict(self.style.map('Treeview', 'background'))
+
+            popup = self.popup = tk.Menu(
+                self.winfo_toplevel(),
+                tearoff=0,
+                bg=self.thumbcolor,
+                fg='#000000',
+                activebackground=opts['selected']
+            )
             create_new = tk.Menu(popup, tearoff=0)
 
             popup.add_cascade(label="Create New", menu=create_new)
@@ -728,16 +836,16 @@ class Treeview(ttk.Treeview):
                 wdg.destroy()
                 self.active_cell = None
 
-            if mode == tk.WRITABLE:
-                values = self.columns[col].get('values', None)
-                wdg = Combobox(self, values=values, state='readonly')
-                wdg.place(x=x+1, y=y, anchor='w', width=width)
-                wdg.var.set(text)
+            state = '' if mode == tk.WRITABLE else 'readonly'
+            values = self.columns[col].get('values', '')
+            wdg = Combobox(self, state=state, values=values)
+            wdg.place(x=x-1, y=y, anchor='w', width=width)
+            wdg.var.set(text)
 
-                wdg.bind('<Return>', enter)
-                wdg.bind('<KP_Enter>', enter)
-                wdg.bind('<Escape>', destroy)
-                wdg.bind('<Control-z>', destroy)
+            wdg.bind('<Return>', enter)
+            wdg.bind('<KP_Enter>', enter)
+            wdg.bind('<Escape>', destroy)
+            wdg.bind('<Control-z>', destroy)
 
         elif _type == 'Entry':
             def enter(_):
@@ -788,8 +896,11 @@ class Treeview(ttk.Treeview):
 
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
-                wdg.place(x=x+1, y=y, anchor='w', width=width)
+                wdg.place(x=x-1, y=y, anchor='w', width=width)
                 wdg.var.set(text)
+                opts = dict(self.style.map('Treeview', 'background'))
+
+                print(self.style.element_options("TEntry.background"))
 
                 wdg.bind('<Return>', enter)
                 wdg.bind('<KP_Enter>', enter)
