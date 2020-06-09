@@ -118,7 +118,7 @@ class App(tk.Tk):
                         {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 100, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
-                            'values': (' Value 1 ', ' Value 2 ', ' Value 3 ', ' Value 4 ', ' Value 5 '),
+                            'values': ('',  ' Value 1 ', ' Value 2 ', ' Value 3 ', ' Value 4 ', ' Value 5 '),
                          },
                     ),
                     'data': (
@@ -598,7 +598,7 @@ class Treeview(ttk.Treeview):
 
         dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
 
-        root.wait_window(self)
+        root.wait_window(dlg)
 
     def add_leaf(self):
         def is_unique(text):
@@ -717,22 +717,22 @@ class Treeview(ttk.Treeview):
         _type = self.columns[col].get('type', None)
 
         if _type == 'Combobox':
+            def enter(_):
+                if not col:
+                    self.item(self.focus(), text=wdg.get())
+                else:
+                    self.value_set(col-1, wdg.get(), self.focus())
+                destroy()
+
+            def destroy(_=None):
+                wdg.destroy()
+                self.active_cell = None
+
             if mode == tk.WRITABLE:
                 values = self.columns[col].get('values', None)
                 wdg = Combobox(self, values=values, state='readonly')
                 wdg.place(x=x+1, y=y, anchor='w', width=width)
                 wdg.var.set(text)
-
-                def destroy(_=None):
-                    wdg.destroy()
-                    self.active_cell = None
-
-                def enter(_):
-                    if not col:
-                        self.item(self.focus(), text=wdg.get())
-                    else:
-                        self.value_set(col-1, wdg.get(), self.focus())
-                    destroy()
 
                 wdg.bind('<Return>', enter)
                 wdg.bind('<KP_Enter>', enter)
@@ -740,55 +740,56 @@ class Treeview(ttk.Treeview):
                 wdg.bind('<Control-z>', destroy)
 
         elif _type == 'Entry':
+            def enter(_):
+                _item = self.focus()
+                wdg_text = wdg.var.get()
+                item_text = self.item(_item, 'text')
+
+                if not item_text and not wdg_text:
+                    wdg.destroy()
+                    self.active_cell = None
+                    self.delete(_item)
+                    return
+
+                elif item_text and not wdg_text:
+                    self.item(_item, text=item_text)
+                    wdg.destroy()
+                    self.active_cell = None
+                    return
+
+                if not col:
+                    if unique:
+                        parent = self.parent(_item)
+                        for node in self.get_children(parent):
+                            if wdg_text == self.item(node, 'text'):
+                                self.dlg_message(
+                                    'Duplicate Name',
+                                    f'The name "{wdg_text}" already exists, please choose another name and try again.')
+                                return
+
+                    self.item(_item, text=wdg_text)
+                else:
+                    self.value_set(col-1, wdg.get(), _item)
+
+                wdg.destroy()
+                self.active_cell = None
+                self.tags_reset()
+
+            def destroy(_=None):
+                wdg.destroy()
+                self.active_cell = None
+
+                _item = self.focus()
+                _text = self.item(_item, 'text')
+                self.tags_reset()
+                if not _text:
+                    self.delete(item)
+                self.tags_reset()
+
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
                 wdg.place(x=x+1, y=y, anchor='w', width=width)
                 wdg.var.set(text)
-
-                def destroy(_=None):
-                    _item = self.focus()
-                    _text = self.item(_item, 'text')
-                    wdg.destroy()
-                    self.active_cell = None
-                    self.tags_reset()
-                    if not _text:
-                        self.delete(item)
-                    self.tags_reset()
-
-                def enter(_):
-                    _item = self.focus()
-                    wdg_text = wdg.var.get()
-                    item_text = self.item(_item, 'text')
-
-                    if not item_text and not wdg_text:
-                        wdg.destroy()
-                        self.active_cell = None
-                        self.delete(_item)
-                        return
-
-                    elif item_text and not wdg_text:
-                        self.item(_item, text=item_text)
-                        wdg.destroy()
-                        self.active_cell = None
-                        return
-
-                    if not col:
-                        if unique:
-                            parent = self.parent(_item)
-                            for node in self.get_children(parent):
-                                if wdg_text == self.item(node, 'text'):
-                                    self.dlg_message(
-                                        'Duplicate Name',
-                                        f'The name "{wdg_text}" already exists, please choose another name and try again.')
-                                    return
-
-                        self.item(_item, text=wdg_text)
-                    else:
-                        self.value_set(col-1, wdg.get(), _item)
-
-                    wdg.destroy()
-                    self.active_cell = None
-                    self.tags_reset()
 
                 wdg.bind('<Return>', enter)
                 wdg.bind('<KP_Enter>', enter)
@@ -834,19 +835,31 @@ class Treeview(ttk.Treeview):
 
             self.active_cell.destroy()
             self.active_cell = None
-            if not item_text and not wdg_text:
-                self.delete(item)
-                self.tags_reset()
-                return
-            elif not item_text:
+
+            if item_text == wdg_text and not item_text:
                 self.delete(item)
                 self.tags_reset()
                 return
 
+            if not item_text and not wdg_text:
+                self.delete(item)
+                self.tags_reset()
+                return
+
+            if not item_text:
+                if unique:
+                    for node in self.get_children(self.parent(item)):
+                        if wdg_text == self.item(node, 'text'):
+                            self.delete(item)
+                            self.tags_reset()
+                            return
+                else:
+                    return
+
             if unique:
                 for node in self.get_children(self.parent(item)):
                     if wdg_text == self.item(node, 'text'):
-                        wdg_text = item_text
+                        return
 
             if not column and wdg_text:
                 self.item(self.focus(), text=wdg_text)
@@ -980,7 +993,7 @@ class Treeview(ttk.Treeview):
         iid = self.insert(
             parent,
             idx,
-            values=['', 'Leaf', '', '', datetime.now().strftime("%d/%m/%Y %H:%M:%S")]
+            values=['', 'Leaf', '', '', datetime.now().strftime("%d/%m/%Y %H:%M:%S"), '']
         )
 
         self.focus(iid)
