@@ -272,62 +272,6 @@ class MessageDialog(DialogBase):
         frame.grid(row=1, sticky=tk.EW, padx=10, pady=(10, 20))
 
 
-class AddNodeDialog(DialogBase):
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
-
-        self.container = ttk.Frame(self)
-        self.container.rowconfigure(1, weight=1)
-        self.container.columnconfigure(0, weight=1)
-        self.container.grid(sticky=tk.NSEW)
-
-        frame = self.row0 = ttk.Frame(self.container)
-        frame.columnconfigure(1, weight=1)
-        self.label = ttk.Label(frame, text="Name")
-        self.label.grid(sticky=tk.NSEW, row=0, column=0)
-        self.entry = Entry(frame, width=30)
-        self.entry.config(textvariable=self.entry.var)
-        self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
-        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
-
-        frame = self.row1 = ttk.Frame(self.container)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
-        self.button_ok = ttk.Button(frame, text="Ok")
-        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
-        self.button_cancel = ttk.Button(frame, text="Cancel")
-        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
-        frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
-
-
-class AddLeafDialog(DialogBase):
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
-
-        self.container = ttk.Frame(self)
-        self.container.rowconfigure(1, weight=1)
-        self.container.columnconfigure(0, weight=1)
-        self.container.grid(sticky=tk.NSEW)
-
-        frame = self.row0 = ttk.Frame(self.container)
-        frame.columnconfigure(1, weight=1)
-        self.label = ttk.Label(frame, text="Name")
-        self.label.grid(sticky=tk.NSEW, row=0, column=0)
-        self.entry = Entry(frame, width=30)
-        self.entry.config(textvariable=self.entry.var)
-        self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
-        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
-
-        frame = self.row1 = ttk.Frame(self.container)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
-        self.button_ok = ttk.Button(frame, text="Ok")
-        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
-        self.button_cancel = ttk.Button(frame, text="Cancel")
-        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
-        frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
-
-
 class Text(tk.Text):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -436,7 +380,7 @@ class Combobox(ttk.Combobox):
             popup.add_command(label="Copy", command=lambda: self.event_generate('<Control-c>'))
             popup.add_command(label="Paste", command=lambda: self.event_generate('<Control-v>'))
             popup.add_separator()
-            popup.add_command(label="Delete", command=lambda: self.clear)
+            popup.add_command(label="Delete", command=self.clear)
 
         self.menu_background = self.style.lookup('TScrollbar.thumb', 'background')
         set_popup_menu()
@@ -446,7 +390,6 @@ class Combobox(ttk.Combobox):
         self.icursor(tk.END)
 
     def clear(self):
-        print(4444444444)
         self.var.set('')
 
     def popup_menu(self, event):
@@ -781,10 +724,11 @@ class Treeview(ttk.Treeview):
 
         if _type == 'Combobox':
             def enter(_):
+                _text = wdg.get().strip(' ')
                 if not col:
-                    self.item(self.focus(), text=wdg.get())
+                    self.item(self.focus(), text=_text)
                 else:
-                    self.value_set(col-1, wdg.get(), self.focus())
+                    self.value_set(col-1, _text, self.focus())
                 destroy()
 
             def destroy(_=None):
@@ -813,38 +757,41 @@ class Treeview(ttk.Treeview):
         elif _type == 'Entry':
             def enter(_):
                 _item = self.focus()
-                wdg_text = wdg.var.get()
+                wdg_text = wdg.var.get().strip(' ')
                 item_text = self.item(_item, 'text')
 
-                if not item_text and not wdg_text:
-                    wdg.destroy()
-                    self.active_cell = None
-                    self.delete(_item)
-                    return
+                if item_text != wdg_text:
 
-                elif item_text and not wdg_text:
-                    self.item(_item, text=item_text)
-                    wdg.destroy()
-                    self.active_cell = None
-                    return
+                    if not item_text and not wdg_text:
+                        wdg.destroy()
+                        self.active_cell = None
+                        self.delete(_item)
+                        return
 
-                if not col:
-                    if unique:
-                        parent = self.parent(_item)
-                        for node in self.get_children(parent):
-                            if wdg_text == self.item(node, 'text'):
-                                self.dlg_message(
-                                    'Duplicate Name',
-                                    f'The name "{wdg_text}" already exists, please choose another name and try again.')
-                                return
+                    elif item_text and not wdg_text:
+                        self.item(_item, text=item_text)
+                        wdg.destroy()
+                        self.active_cell = None
+                        return
 
-                    self.item(_item, text=wdg_text)
-                else:
-                    self.value_set(col-1, wdg.get(), _item)
+                    if not col:
+                        if unique:
+                            parent = self.parent(_item)
+                            for node in self.get_children(parent):
+                                if wdg_text == self.item(node, 'text'):
+                                    self.dlg_message(
+                                        'Duplicate Name',
+                                        f'The name "{wdg_text}" already exists, please choose another name and try again.')
+                                    return
+
+                        self.item(_item, text=wdg_text)
+                    else:
+                        self.value_set(col-1, wdg.get(), _item)
 
                 wdg.destroy()
                 self.active_cell = None
                 self.tags_reset()
+                self.selection_set(_item)
 
             def destroy(_=None):
                 wdg.destroy()
