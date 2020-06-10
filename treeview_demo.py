@@ -1108,6 +1108,7 @@ class Treeview(ttk.Treeview):
                 pass
             else:
                 for node in self.get_children(parent):
+                    print(kwargs)
                     text = kwargs['text']
                     if text == self.item(node, 'text'):
                         self.dlg_message(
@@ -1141,7 +1142,7 @@ class Treeview(ttk.Treeview):
         iid = self.insert(
             parent,
             idx,
-            values=['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
+            **{'text': '', 'values': (['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
         )
 
         self.focus(iid)
@@ -1172,7 +1173,7 @@ class Treeview(ttk.Treeview):
             parent,
             idx,
             open=True,
-            values=['', 'Node', True, '', '0 items', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
+            **{'text': '', 'values': (['', 'Node', True, '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
         )
 
         self.focus(iid)
