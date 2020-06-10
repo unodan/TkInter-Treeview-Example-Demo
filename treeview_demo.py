@@ -11,8 +11,9 @@ _IID = 0
 _TYPE = 1
 _OPEN = 2
 _TAGS = 3
-_MODIFIED = 4
-_DATA1 = 5
+_SIZE = 4
+_MODIFIED = 5
+_DATA1 = 6
 
 
 def dump(data, indent=None):
@@ -120,6 +121,7 @@ class App(tk.Tk):
                         {'text': 'Item', 'anchor': tk.W},
                         {'text': 'Open', 'anchor': tk.W},
                         {'text': 'Tags', 'anchor': tk.W},
+                        {'text': 'Size', 'anchor': tk.W},
                         {'text': 'Last Modified', 'anchor': tk.W},
                         {'text': 'Data', 'anchor': tk.W},
                     ),
@@ -129,29 +131,30 @@ class App(tk.Tk):
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
+                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
                             'values': (' Value 1 ', ' Value 2 ', ' Value 3 ', ' Value 4 ', ' Value 5 '),
                          },
                     ),
                     'data': (
-                        {'text': 'Folder 0', 'open': 1, 'values': ('', 'Node', True, '', dt_string, ''),
+                        {'text': 'Folder 0', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
                          'children': (
-                             {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
-                             {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
-                             {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
-                             {'text': 'Folder 0_1', 'open': 1, 'values': ('', 'Node', True, '', dt_string, ''),
+                             {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                             {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                             {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                             {'text': 'Folder 0_1', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
                               'children': (
-                                  {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
-                                  {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
-                                  {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
+                                  {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                                  {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                                  {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
                               )},
                          )},
-                        {'text': 'Folder 1', 'open': 1, 'values': ('', 'Node', True, '', dt_string, ''),
+                        {'text': 'Folder 1', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
                          'children': (
-                             {'text': 'photo4.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
-                             {'text': 'photo5.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
-                             {'text': 'photo6.png', 'values': ('', 'Leaf', '', '', dt_string, '')},
+                             {'text': 'photo4.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                             {'text': 'photo5.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                             {'text': 'photo6.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
                          )},
                     )
                 }
@@ -250,6 +253,33 @@ class DialogBase(tk.Toplevel):
 
         self.title(title)
         self.geometry(f'{_width}x{_height}+{geometry[1]}')
+
+
+class RenameDialog(DialogBase):
+    def __init__(self, parent, **kwargs):
+        message = kwargs.pop('message', 'No Message!')
+        super().__init__(parent, **kwargs)
+
+        frame = self.row0 = ttk.Frame(self.container)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+        self.label = ttk.Label(frame, text=message)
+        self.label.grid(sticky=tk.NSEW, pady=5, row=0, column=0)
+        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
+
+        self.entry = Entry(frame, width=30)
+        self.entry.config(textvariable=self.entry.var)
+        self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
+
+        frame = self.row1 = ttk.Frame(self.container)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        self.button_ok = ttk.Button(frame, text="Ok")
+        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
+        self.button_cancel = ttk.Button(frame, text="Cancel")
+        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
+        frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
 
 
 class MessageDialog(DialogBase):
@@ -453,11 +483,9 @@ class Treeview(ttk.Treeview):
 
         setup = kwargs.pop('setup', {})
         data = setup.pop('data', [])
-        self.cursor = setup.pop('cursor', [0, 0])
         self.columns = setup['columns']
         self.headings = setup['headings']
         self.scroll = kwargs.pop('scroll', (True, True))
-
         super().__init__(self.frame, **kwargs)
 
         self.detached = []
@@ -649,10 +677,11 @@ class Treeview(ttk.Treeview):
 
     def value_set(self, idx, value, item):
         values = list(self.item(item, 'values'))
-        values[idx] = value
-        self.item(item, values=values)
+        if idx < len(values):
+            values[idx] = value
+            self.item(item, values=values)
 
-    def dlg_message(self, title, message):
+    def dlg_rename(self, title, message):
         def ok(_=None):
             dlg.destroy()
 
@@ -668,6 +697,45 @@ class Treeview(ttk.Treeview):
 
         x = self.active_cell.winfo_rootx()
         y = self.active_cell.winfo_rooty()
+        item = self.identify('item', x, y-self.winfo_rooty())
+
+        widest = 0
+        font = tkfont.nametofont('TkDefaultFont')
+        for node in self.get_children(self.parent(item)):
+            size = font.measure(self.item(node, 'text'))
+            if size > widest:
+                widest = size + font.measure('W')
+
+        x += widest
+        y += self.rowheight + self.rowheight // 2
+
+        dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
+
+        root.wait_window(dlg)
+
+    def dlg_message(self, title, message):
+        def ok(_=None):
+            dlg.destroy()
+
+        root = self.winfo_toplevel()
+        dlg = MessageDialog(root, width=320, height=130, title=title, message=message)
+        dlg.update_idletasks()
+        dlg.label.config(wraplength=dlg.container.winfo_width())
+        dlg.button_ok.focus()
+
+        dlg.button_ok.config(command=ok)
+        dlg.button_ok.bind('<Return>', ok)
+        dlg.button_ok.bind('<KP_Enter>', ok)
+
+        if self.active_cell:
+            x = self.active_cell.winfo_rootx()
+            y = self.active_cell.winfo_rooty()
+        else:
+            bbox = self.bbox(self.focus())
+            x, y, _, _ = bbox
+            x += root.winfo_rootx()
+            y += root.winfo_rooty()
+
         item = self.identify('item', x, y-self.winfo_rooty())
 
         widest = 0
@@ -726,39 +794,7 @@ class Treeview(ttk.Treeview):
         unique = self.columns[col].get('unique', False)
         _type = self.columns[col].get('type', None)
 
-        if _type == 'Combobox':
-            def enter(_):
-                _text = wdg.get().strip(' ')
-                if not col:
-                    self.item(self.focus(), text=_text)
-                else:
-                    self.value_set(col-1, _text, self.focus())
-                destroy()
-
-            def destroy(_=None):
-                wdg.destroy()
-                self.active_cell = None
-
-            def control_a(_=None):
-                def func():
-                    wdg.select_range(0, tk.END)
-                    wdg.icursor(tk.END)
-                self.after(1, func)
-
-            state = '' if mode == tk.WRITABLE else 'readonly'
-            values = self.columns[col].get('values', '')
-            wdg = Combobox(self, state=state, values=values)
-            wdg.place(x=x-1, y=y, anchor='w', width=width)
-            wdg.var.set(text)
-            wdg.icursor(tk.END)
-
-            wdg.bind('<Return>', enter)
-            wdg.bind('<KP_Enter>', enter)
-            wdg.bind('<Escape>', destroy)
-            wdg.bind('<Control-z>', destroy)
-            wdg.bind('<Control-a>', control_a)
-
-        elif _type == 'Entry':
+        if _type == 'Entry':
             def enter(_):
                 _item = self.focus()
                 wdg_text = wdg.var.get().strip(' ')
@@ -827,6 +863,38 @@ class Treeview(ttk.Treeview):
                 wdg.bind('<Control-z>', destroy)
                 wdg.bind('<Control-a>', control_a)
 
+        elif _type == 'Combobox':
+            def enter(_):
+                _text = wdg.get().strip(' ')
+                if not col:
+                    self.item(self.focus(), text=_text)
+                else:
+                    self.value_set(col-1, _text, self.focus())
+                destroy()
+
+            def destroy(_=None):
+                wdg.destroy()
+                self.active_cell = None
+
+            def control_a(_=None):
+                def func():
+                    wdg.select_range(0, tk.END)
+                    wdg.icursor(tk.END)
+                self.after(1, func)
+
+            state = '' if mode == tk.WRITABLE else 'readonly'
+            values = self.columns[col].get('values', '')
+            wdg = Combobox(self, state=state, values=values)
+            wdg.place(x=x-1, y=y, anchor='w', width=width)
+            wdg.var.set(text)
+            wdg.icursor(tk.END)
+
+            wdg.bind('<Return>', enter)
+            wdg.bind('<KP_Enter>', enter)
+            wdg.bind('<Escape>', destroy)
+            wdg.bind('<Control-z>', destroy)
+            wdg.bind('<Control-a>', control_a)
+
         return wdg
 
     def wheel_mouse(self, event):
@@ -889,7 +957,6 @@ class Treeview(ttk.Treeview):
 
     def double_click(self, event):
         region = self.identify_region(event.x, event.y)
-        column = self.identify_column(event.x)
 
         if region == 'tree' or region == 'cell':
             row = self.identify_row(event.y)
@@ -986,21 +1053,38 @@ class Treeview(ttk.Treeview):
                     self.value_set(_MODIFIED, datetime.now().strftime("%Y/%m/%d %H:%M:%S"), item)
 
                     iid = self.insert(dst, **self.item(item))
-                    self.value_set(_IID, iid, iid)
-                    self.tag_remove('selected', iid)
-                    selected[item] = iid
+                    if iid:
+                        self.value_set(_IID, iid, iid)
+                        self.tag_remove('selected', iid)
+                        selected[item] = iid
 
             self.tags_reset(excluded='selected')
             self.selection_remove(self.tag_has('selected'))
             self.selection_set(self.focus())
 
-    def detach(self, *selections):
-        if not selections:
-            selections = self.selection()
+    def delete(self, *items):
+        for item in items:
+            parent = self.parent(item)
+            if parent:
+                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
+                word = 'item' if value == 1 else 'items'
+                self.value_set(_SIZE, f'{value} {word}', parent)
+
+        super(Treeview, self).delete(*items)
+
+    def detach(self, *items):
+        if not items:
+            items = self.selection()
 
         self.undo_data = {}
-        for item in selections:
+        for item in items:
             self.undo_data[item] = (self.parent(item), self.index(item))
+
+            parent = self.parent(item)
+            if parent:
+                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
+                word = 'item' if value == 1 else 'items'
+                self.value_set(_SIZE, f'{value} {word}', parent)
 
         item = self.focus()
         item = self.prev(item)
@@ -1013,7 +1097,31 @@ class Treeview(ttk.Treeview):
 
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
+
+        unique_columns = []
+        for idx, c in enumerate(self.columns):
+            if 'unique' in c and c['unique']:
+                unique_columns.append(idx)
+
+        for column in unique_columns:
+            if column:
+                pass
+            else:
+                for node in self.get_children(parent):
+                    text = kwargs['text']
+                    if text == self.item(node, 'text'):
+                        self.dlg_message(
+                            'Duplicate Name',
+                            f'The name "{text}" already exists, please choose another '
+                            f'name and try again.')
+                        return
+
         iid = super(Treeview, self).insert(parent, index, **kwargs)
+
+        child_count = len(self.get_children(parent))
+        if child_count:
+            word = 'item' if child_count == 1 else 'items'
+            self.value_set(_SIZE, f'{len(self.get_children(parent))} {word}', parent)
         self.see(iid)
         return iid
 
@@ -1033,7 +1141,7 @@ class Treeview(ttk.Treeview):
         iid = self.insert(
             parent,
             idx,
-            values=['', 'Leaf', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
+            values=['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
         )
 
         self.focus(iid)
@@ -1064,7 +1172,7 @@ class Treeview(ttk.Treeview):
             parent,
             idx,
             open=True,
-            values=['', 'Node', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
+            values=['', 'Node', True, '', '0 items', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
         )
 
         self.focus(iid)
