@@ -112,7 +112,7 @@ class App(tk.Tk):
                     data = json.load(f)
             else:
                 now = datetime.now()
-                dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+                dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
                 data = {
                     'headings': (
                         {'text': 'Name', 'anchor': tk.W},
@@ -129,7 +129,7 @@ class App(tk.Tk):
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 100, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
+                        {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
                             'values': (' Value 1 ', ' Value 2 ', ' Value 3 ', ' Value 4 ', ' Value 5 '),
                          },
@@ -462,10 +462,13 @@ class Treeview(ttk.Treeview):
 
         self.detached = []
         self.undo_data = {}
+        self.sorted_columns = {}
+
         self.shift = \
             self.popup = \
             self.selected = \
             self.menu_background = \
+            self.prev_column = \
             self.active_cell = \
             self.cursor_offset = \
             self.scroll_x = \
@@ -549,6 +552,7 @@ class Treeview(ttk.Treeview):
             for idx, cfg in enumerate(data['headings']):
                 _id = cfg['column'] if 'column' in cfg else f'#{idx}'
                 self.heading(_id, text=cfg['text'], anchor=cfg['anchor'])
+                self.sorted_columns[f'#{idx}'] = True
 
             for idx, cfg in enumerate(data['columns']):
                 _id = cfg['column'] if 'column' in cfg else f'#{idx}'
@@ -781,7 +785,8 @@ class Treeview(ttk.Treeview):
                                 if wdg_text == self.item(node, 'text'):
                                     self.dlg_message(
                                         'Duplicate Name',
-                                        f'The name "{wdg_text}" already exists, please choose another name and try again.')
+                                        f'The name "{wdg_text}" already exists, please choose another '
+                                        f'name and try again.')
                                     return
 
                         self.item(_item, text=wdg_text)
@@ -883,15 +888,22 @@ class Treeview(ttk.Treeview):
             self.tags_reset()
 
     def double_click(self, event):
-        row = self.identify_row(event.y)
+        region = self.identify_region(event.x, event.y)
         column = self.identify_column(event.x)
 
-        self.active_cell = self.widget_popup(row, column)
-        if self.active_cell:
-            self.active_cell.column = column
-            self.active_cell.focus()
-            if isinstance(self.active_cell, Entry):
-                self.active_cell.select_range(0, tk.END)
+        if region == 'tree' or region == 'cell':
+            row = self.identify_row(event.y)
+            column = self.identify_column(event.x)
+
+            self.active_cell = self.widget_popup(row, column)
+            if self.active_cell:
+                self.active_cell.column = column
+                self.active_cell.focus()
+                if isinstance(self.active_cell, Entry):
+                    self.active_cell.select_range(0, tk.END)
+        elif region == 'heading':
+            pass
+            self.after(1, self.tags_reset)
 
         return 'break'
 
@@ -971,7 +983,7 @@ class Treeview(ttk.Treeview):
                 for item in selections:
                     parent = self.parent(item)
                     dst = selected[parent] if parent in selected else dst_item
-                    self.value_set(_MODIFIED, datetime.now().strftime("%d/%m/%Y %H:%M:%S"), item)
+                    self.value_set(_MODIFIED, datetime.now().strftime("%Y/%m/%d %H:%M:%S"), item)
 
                     iid = self.insert(dst, **self.item(item))
                     self.value_set(_IID, iid, iid)
@@ -1021,7 +1033,7 @@ class Treeview(ttk.Treeview):
         iid = self.insert(
             parent,
             idx,
-            values=['', 'Leaf', '', '', datetime.now().strftime("%d/%m/%Y %H:%M:%S"), '']
+            values=['', 'Leaf', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
         )
 
         self.focus(iid)
@@ -1052,7 +1064,7 @@ class Treeview(ttk.Treeview):
             parent,
             idx,
             open=True,
-            values=['', 'Node', '', '', datetime.now().strftime("%d/%m/%Y %H:%M:%S"), '']
+            values=['', 'Node', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), '']
         )
 
         self.focus(iid)
