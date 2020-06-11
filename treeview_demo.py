@@ -137,7 +137,7 @@ class App(tk.Tk):
                         {'width': 80, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
                         {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
-                            'values': (' Value 1 ', ' Value 2 ', ' Value 3 ', ' Value 4 ', ' Value 5 '),
+                            'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
                          },
                     ),
                     'data': (
@@ -220,11 +220,6 @@ class App(tk.Tk):
                     #     data['columns'][idx]['mode'] = self.treeview.columns[idx]['mode']
 
                 json.dump(data, f, indent=3)
-
-
-class Test(tk.Event):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
 
 
 class Event:
@@ -513,6 +508,7 @@ class Treeview(ttk.Treeview):
             self.active_popup_widget = \
             self.active_popup_row = \
             self.active_popup_column = \
+            self.active_popup_value = \
             self.cursor_offset = \
             self.menu_background = None
 
@@ -1470,21 +1466,24 @@ class Treeview(ttk.Treeview):
     def popup_widget_place(self, _=None):
         bbox = self.bbox(self.focus())
         if not bbox and self.active_popup_widget:
+            self.active_popup_value = self.active_popup_widget.var.get()
             self.active_popup_widget.destroy()
             self.active_popup_widget = None
         elif not self.active_popup_widget:
             self.active_popup_widget = self.popup_widget(self.active_popup_row, self.active_popup_column)
+            if self.active_popup_widget:
+                self.active_popup_widget.var.set(self.active_popup_value)
         elif self.active_popup_widget:
             x, y, width, height = self.bbox(self.active_popup_row, self.active_popup_column)
             y += height // 2
 
             if self.active_popup_column == '#0':
-                x += self.indent / 2
+                x += self.indent / 2 + 4
                 width -= self.indent / 2 + 1
             else:
                 x += 1
 
-            self.active_popup_widget.place(x=x+4, y=y, anchor='w', width=width-4)
+            self.active_popup_widget.place(x=x, y=y, anchor='w')
 
     def popup_widget_remove(self, _=None):
         if self.active_popup_widget:
