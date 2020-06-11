@@ -479,7 +479,7 @@ class Scrollbar(ttk.Scrollbar):
             self.grid_remove()
 
         if self.callback:
-            self.callback('scrollbar')
+            self.callback(self)
 
 
 class Treeview(ttk.Treeview):
@@ -506,9 +506,7 @@ class Treeview(ttk.Treeview):
             self.selected = \
             self.dlg_results = \
             self.active_popup_widget = \
-            self.active_popup_row = \
             self.active_popup_column = \
-            self.active_popup_value = \
             self.cursor_offset = \
             self.menu_background = None
 
@@ -526,6 +524,11 @@ class Treeview(ttk.Treeview):
         self.frame.grid(sticky=tk.NSEW)
 
     def setup(self, data):
+        def test(bar):
+            if self.active_popup_widget:
+                self.active_popup_widget.destroy()
+                self.active_popup_widget = None
+
         def set_style():
             background = self.style.lookup("TFrame", "background")
 
@@ -569,13 +572,13 @@ class Treeview(ttk.Treeview):
             scroll_x, scroll_y = self.scroll
 
             if scroll_x:
-                sb_x = self.scroll_x = Scrollbar(self.frame)
+                sb_x = self.scroll_x = Scrollbar(self.frame, callback=test)
                 sb_x.configure(command=self.xview, orient=tk.HORIZONTAL)
                 sb_x.grid(sticky=tk.NSEW, row=980, column=0)
                 self.configure(xscrollcommand=sb_x.set)
 
             if scroll_y:
-                sb_y = self.scroll_y = Scrollbar(self.frame)
+                sb_y = self.scroll_y = Scrollbar(self.frame, callback=test)
                 sb_y.configure(command=self.yview)
                 self.configure(yscrollcommand=sb_y.set)
                 sb_y.grid(sticky=tk.NSEW, row=0, column=990)
@@ -1125,8 +1128,6 @@ class Treeview(ttk.Treeview):
         value = -0.1/3 if event.num == 5 else 0.1/3
         self.yview('moveto', self.yview()[0] + value)
 
-        self.popup_widget_place()
-
         return 'break'
 
     def single_click(self, _):
@@ -1185,11 +1186,9 @@ class Treeview(ttk.Treeview):
                 self.active_popup_widget.destroy()
 
             self.active_popup_widget = self.popup_widget(row, column)
-            self.active_popup_row = row
-            self.active_popup_column = column
 
             if self.active_popup_widget:
-                self.active_popup_widget.column = column
+                self.active_popup_column = column
                 self.active_popup_widget.focus()
                 if isinstance(self.active_popup_widget, Entry):
                     self.active_popup_widget.select_range(0, tk.END)
@@ -1463,28 +1462,6 @@ class Treeview(ttk.Treeview):
 
         return wdg
 
-    def popup_widget_place(self, _=None):
-        bbox = self.bbox(self.focus())
-        if not bbox and self.active_popup_widget:
-            self.active_popup_value = self.active_popup_widget.var.get()
-            self.active_popup_widget.destroy()
-            self.active_popup_widget = None
-        elif not self.active_popup_widget:
-            self.active_popup_widget = self.popup_widget(self.active_popup_row, self.active_popup_column)
-            if self.active_popup_widget:
-                self.active_popup_widget.var.set(self.active_popup_value)
-        elif self.active_popup_widget:
-            x, y, width, height = self.bbox(self.active_popup_row, self.active_popup_column)
-            y += height // 2
-
-            if self.active_popup_column == '#0':
-                x += self.indent / 2 + 4
-                width -= self.indent / 2 + 1
-            else:
-                x += 1
-
-            self.active_popup_widget.place(x=x, y=y, anchor='w')
-
     def popup_widget_remove(self, _=None):
         if self.active_popup_widget:
             self.active_popup_widget.destroy()
@@ -1493,14 +1470,10 @@ class Treeview(ttk.Treeview):
     def bindings_set(self):
         bindings = {
             '<Key>': self.key_press,
-            '<KeyRelease>': self.key_release,
-            '<Double-Button-1>': self.double_click,
+            '<Escape>': self.escape,
             '<Button-1>': self.single_click,
             '<Button-4>': self.wheel_mouse,
             '<Button-5>': self.wheel_mouse,
-            '<ButtonRelease-1>': self.button_release,
-            '<Escape>': self.escape,
-            # '<Escape>': self.tags_reset,
             '<Shift-Up>': self.shift_up,
             '<Shift-Down>': self.shift_down,
             '<Control-a>': self.control_a,
@@ -1508,10 +1481,10 @@ class Treeview(ttk.Treeview):
             '<Control-c>': self.copy,
             '<Control-v>': self.paste,
             '<Control-z>': self.undo,
-            '<Configure>': self.popup_widget_remove,
-
+            '<KeyRelease>': self.key_release,
             '<ButtonPress-3>': self.popup_menu,
-            # '<<TreeviewSelect>>': self.select,
+            '<Double-Button-1>': self.double_click,
+            '<ButtonRelease-1>': self.button_release,
             '<<TreeviewOpen>>': self.expand_tree,
             '<<TreeviewClose>>': self.collapse_tree,
         }
