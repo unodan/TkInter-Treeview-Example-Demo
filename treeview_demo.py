@@ -15,6 +15,9 @@ _SIZE = 4
 _MODIFIED = 5
 _DATA1 = 6
 
+_SKIP = 0
+_CANCEL = 1
+
 
 def dump(data, indent=None):
     if not isinstance(data, dict):
@@ -237,9 +240,8 @@ class DialogBase(tk.Toplevel):
         self.rowconfigure(0, weight=1)
         self.columnconfigure(0, weight=1)
 
+        self.results = None
         self.container = ttk.Frame(self)
-        self.container.rowconfigure(0, weight=1)
-        self.container.columnconfigure(0, weight=1)
         self.container.grid(sticky=tk.NSEW)
 
         self.options = kwargs
@@ -259,27 +261,32 @@ class RenameDialog(DialogBase):
     def __init__(self, parent, **kwargs):
         message = kwargs.pop('message', 'No Message!')
         super().__init__(parent, **kwargs)
+        self.container.rowconfigure(1, weight=1)
+        self.container.columnconfigure(0, weight=1)
 
         frame = self.row0 = ttk.Frame(self.container)
         frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(1, weight=1)
+        frame.columnconfigure(0, weight=1)
         self.label = ttk.Label(frame, text=message)
-        self.label.grid(sticky=tk.NSEW, pady=5, row=0, column=0)
-        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
+        self.label.grid(sticky=tk.N+tk.EW, pady=(0, 10), row=0, column=0)
 
         self.entry = Entry(frame, width=30)
         self.entry.config(textvariable=self.entry.var)
-        self.entry.grid(sticky=tk.NSEW, row=0, column=1, padx=(5, 0))
-        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
+        self.entry.grid(sticky=tk.NSEW, row=1, column=0, padx=(5, 0))
+        frame.grid(row=0, sticky=tk.EW, padx=10, pady=(20, 0))
 
         frame = self.row1 = ttk.Frame(self.container)
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
-        self.button_ok = ttk.Button(frame, text="Ok")
-        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
-        self.button_cancel = ttk.Button(frame, text="Cancel")
-        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=1, padx=(5, 0))
-        frame.grid(sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+
+        self.button_rename = ttk.Button(frame, text="Rename", width=8)
+        self.button_rename.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
+        self.button_skip = ttk.Button(frame, text="Skip", width=8)
+        self.button_skip.grid(sticky=tk.NS + tk.E, row=0, column=1, padx=(5, 0))
+        self.button_cancel = ttk.Button(frame, text="Cancel", width=8)
+        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=2, padx=(5, 0))
+
+        frame.grid(row=1, sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
 
 
 class MessageDialog(DialogBase):
@@ -500,7 +507,8 @@ class Treeview(ttk.Treeview):
             self.active_cell = \
             self.cursor_offset = \
             self.scroll_x = \
-            self.scroll_y = None
+            self.scroll_y = \
+            self.dlg_results = None
 
         self.style = ttk.Style()
 
@@ -681,22 +689,39 @@ class Treeview(ttk.Treeview):
             values[idx] = value
             self.item(item, values=values)
 
-    def dlg_rename(self, title, message):
-        def ok(_=None):
+    def dlg_rename(self, title, message, current_name):
+        def rename(_=None):
+            self.dlg_results = dlg.entry.var.get()
+            dlg.destroy()
+
+        def skip(_=None):
+            self.dlg_results = _SKIP
+            dlg.destroy()
+
+        def cancel(_=None):
+            self.dlg_results = _CANCEL
             dlg.destroy()
 
         root = self.winfo_toplevel()
-        dlg = MessageDialog(root, width=320, height=130, title=title, message=message)
+        dlg = RenameDialog(root, width=320, height=150, title=title, message=message)
         dlg.update_idletasks()
         dlg.label.config(wraplength=dlg.container.winfo_width())
-        dlg.button_ok.focus()
+        dlg.button_rename.focus()
+        dlg.entry.var.set(current_name)
 
-        dlg.button_ok.config(command=ok)
-        dlg.button_ok.bind('<Return>', ok)
-        dlg.button_ok.bind('<KP_Enter>', ok)
+        dlg.button_rename.config(command=rename)
+        dlg.button_skip.config(command=skip)
+        dlg.button_cancel.config(command=cancel)
 
-        x = self.active_cell.winfo_rootx()
-        y = self.active_cell.winfo_rooty()
+        if self.active_cell:
+            x = self.active_cell.winfo_rootx()
+            y = self.active_cell.winfo_rooty()
+        else:
+            bbox = self.bbox(self.focus())
+            x, y, _, _ = bbox
+            x += root.winfo_rootx()
+            y += root.winfo_rooty()
+
         item = self.identify('item', x, y-self.winfo_rooty())
 
         widest = 0
@@ -712,6 +737,8 @@ class Treeview(ttk.Treeview):
         dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
 
         root.wait_window(dlg)
+
+        return self.dlg_results
 
     def dlg_message(self, title, message):
         def ok(_=None):
@@ -817,13 +844,25 @@ class Treeview(ttk.Treeview):
                     if not col:
                         if unique:
                             parent = self.parent(_item)
-                            for node in self.get_children(parent):
-                                if wdg_text == self.item(node, 'text'):
-                                    self.dlg_message(
-                                        'Duplicate Name',
+                            children = self.get_children(parent)
+
+                            column_values = []
+                            for node in children:
+                                column_values.append(self.item(node, 'text'))
+
+                            for node in children:
+                                while wdg_text == self.item(node, 'text'):
+                                    result = self.dlg_rename(
+                                        'Rename',
                                         f'The name "{wdg_text}" already exists, please choose another '
-                                        f'name and try again.')
-                                    return
+                                        f'name and try again.',
+                                        wdg_text,
+                                    )
+                                    if result in (_SKIP, _CANCEL):
+                                        return
+
+                                    wdg_text = result
+                                    self.item(item, text=text)
 
                         self.item(_item, text=wdg_text)
                     else:
@@ -1008,13 +1047,13 @@ class Treeview(ttk.Treeview):
         self.tags_reset(excluded='selected')
 
     def copy(self, _=None):
-        def set_selected(_item, copy_all=False):
+        def set_selected(_item):
             self.selected.append(_item)
             self.tag_add('selected', _item)
             self.value_set(_TAGS, str(self.item(_item, 'tags')), _item)
-            if not self.item(_item, 'open') or copy_all:
+            if not self.item(_item, 'open'):
                 for node in self.get_children(_item):
-                    set_selected(node, True)
+                    set_selected(node)
 
         if not self.shift:
             for item in self.tag_has('selected'):
@@ -1095,6 +1134,37 @@ class Treeview(ttk.Treeview):
         self.selection_add(item)
         self.tags_reset(excluded='selected')
 
+    def reattach(self, item, parent, index):
+        for idx, column in enumerate(self.columns):
+            if 'unique' in column and column['unique']:
+                if idx:
+                    pass
+                else:
+                    text = self.item(item, 'text')
+                    children = self.get_children(parent)
+
+                    column_values = []
+                    for node in children:
+                        column_values.append(self.item(node, 'text'))
+
+                    for node in children:
+                        while text == self.item(node, 'text'):
+                            result = self.dlg_rename(
+                                'Rename',
+                                f'The name "{text}" already exists, please choose another '
+                                f'name and try again.',
+                                text,
+                            )
+                            if result in (_SKIP, _CANCEL):
+                                return
+
+                            text = result
+                            self.item(item, text=text)
+
+        iid = self.move(item, parent, index)
+
+        return iid
+
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
 
@@ -1107,15 +1177,26 @@ class Treeview(ttk.Treeview):
             if column:
                 pass
             else:
-                for node in self.get_children(parent):
-                    print(kwargs)
-                    text = kwargs['text']
-                    if text == self.item(node, 'text'):
-                        self.dlg_message(
-                            'Duplicate Name',
+                text = kwargs['text']
+                children = self.get_children(parent)
+
+                column_values = []
+                for node in children:
+                    column_values.append(self.item(node, 'text'))
+
+                for node in children:
+                    while text == self.item(node, 'text'):
+                        result = self.dlg_rename(
+                            'Rename',
                             f'The name "{text}" already exists, please choose another '
-                            f'name and try again.')
-                        return
+                            f'name and try again.',
+                            text,
+                        )
+                        if result in (_SKIP, _CANCEL):
+                            return
+
+                        text = result
+                        kwargs['text'] = text
 
         iid = super(Treeview, self).insert(parent, index, **kwargs)
 
