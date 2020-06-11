@@ -93,7 +93,7 @@ class App(tk.Tk):
             font_width = font.measure('W')
             self.linespace = font.metrics('linespace')
             row_height = self.linespace + tv_line_padding
-            tv_indent = row_height+font_width
+            tv_indent = row_height
             self.style.configure('Treeview', rowheight=row_height)
             self.style.configure('Treeview.Heading', padding=tv_heading_padding, borderwidth=tv_heading_border_width)
             self.style.configure('Treeview', indent=tv_indent)
@@ -722,16 +722,14 @@ class Treeview(ttk.Treeview):
             x += root.winfo_rootx()
             y += root.winfo_rooty()
 
-        item = self.identify('item', x, y-self.winfo_rooty())
-
         widest = 0
         font = tkfont.nametofont('TkDefaultFont')
-        for node in self.get_children(self.parent(item)):
+        for node in self.get_children(self.focus()):
             size = font.measure(self.item(node, 'text'))
             if size > widest:
                 widest = size + font.measure('W')
 
-        x += widest
+        x += (widest + font.measure('W') + self.indent * self.depth(self.focus()))
         y += self.rowheight + self.rowheight // 2
 
         dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
@@ -779,6 +777,19 @@ class Treeview(ttk.Treeview):
 
         root.wait_window(dlg)
 
+    def next(self, item):
+        _next = super(Treeview, self).next(item)
+
+        return _next
+
+    def prev(self, item):
+        _prev = super(Treeview, self).prev(item)
+        if not _prev:
+            parent = self.parent(item)
+            _prev = parent if parent else ''
+
+        return _prev
+
     def select(self, _):
         item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery() - self.winfo_rooty())
         self.focus(item)
@@ -797,7 +808,458 @@ class Treeview(ttk.Treeview):
             self.tags_reset(excluded='selected')
         self.after(1, func)
 
-    def widget_popup(self, row, column):
+    def cut(self, _=None):
+        def set_selections(_item):
+            self.tag_add('selected', _item)
+            for _item in self.get_children(_item):
+                set_selections(_item)
+
+        selections = list(self.selection())
+        for item in reversed(selections):
+            if self.parent(item) in selections:
+                selections.pop(selections.index(item))
+            else:
+                set_selections(item)
+
+        item = self.focus()
+        item = self.prev(item)
+
+        if not item and self.get_children():
+            item = self.get_children()[0]
+
+        self.undo_data = {}
+        for node in selections:
+            self.undo_data[node] = (self.parent(node), self.index(node))
+
+        self.detach(*selections)
+        self.detached = selections
+
+        self.focus(item)
+        self.selection_add(item)
+        self.tags_reset(excluded='selected')
+
+    def copy(self, _=None):
+        def set_selected(_item):
+            self.selected.append(_item)
+            self.tag_add('selected', _item)
+            self.value_set(_TAGS, str(self.item(_item, 'tags')), _item)
+            if not self.item(_item, 'open'):
+                for node in self.get_children(_item):
+                    set_selected(node)
+
+        if not self.shift:
+            for item in self.tag_has('selected'):
+                self.tag_remove('selected', item)
+                self.value_set(_TAGS, str(self.item(item, 'tags')), item)
+
+        self.selected = []
+        for item in self.selection():
+            set_selected(item)
+
+    def undo(self, _=None):
+        for item, (parent, idx) in self.undo_data.items():
+            self.reattach(item, parent, idx)
+            self.selection_remove(item)
+        self.tags_reset()
+
+    def paste(self, _=None):
+        selections = self.detached if self.detached else self.selected
+
+        if not self.selected and not self.detached:
+            selections = self.tag_has('selected')
+
+        for dst_item in self.selection():
+            if not len(selections) or self.value_get(_TYPE, dst_item) != 'Node':
+                continue
+
+            if self.detached:
+                for item in selections:
+                    self.reattach(item, dst_item, tk.END)
+                self.detached = False
+            else:
+                selected = {}
+                for item in selections:
+                    parent = self.parent(item)
+                    dst = selected[parent] if parent in selected else dst_item
+                    self.value_set(_MODIFIED, datetime.now().strftime("%Y/%m/%d %H:%M:%S"), item)
+
+                    iid = self.insert(dst, **self.item(item))
+                    if iid:
+                        self.value_set(_IID, iid, iid)
+                        self.tag_remove('selected', iid)
+                        selected[item] = iid
+
+            self.tags_reset(excluded='selected')
+            self.selection_remove(self.tag_has('selected'))
+            self.selection_set(self.focus())
+
+    def delete(self, *items):
+        for item in items:
+            parent = self.parent(item)
+            if parent:
+                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
+                word = 'item' if value == 1 else 'items'
+                self.value_set(_SIZE, f'{value} {word}', parent)
+
+        super(Treeview, self).delete(*items)
+
+    def control_a(self, _):
+        def select(_child):
+            self.selection_add(_child)
+            for node in self.get_children(_child):
+                select(node)
+        for child in self.get_children():
+            select(child)
+
+    def key_press(self, event):
+        if 'Shift' in event.keysym:
+            self.shift = True
+            self.cursor_offset = 0
+
+    def key_release(self, event):
+        if 'Shift' in event.keysym:
+            self.shift = False
+
+    def insert(self, parent, index=tk.END, **kwargs):
+        kwargs.pop('children', None)
+
+        unique_columns = []
+        for idx, c in enumerate(self.columns):
+            if 'unique' in c and c['unique']:
+                unique_columns.append(idx)
+
+        for column in unique_columns:
+            if column:
+                pass
+            else:
+                text = kwargs['text']
+                children = self.get_children(parent)
+
+                column_values = []
+                for node in children:
+                    column_values.append(self.item(node, 'text'))
+
+                for node in children:
+                    while text == self.item(node, 'text'):
+                        result = self.dlg_rename(
+                            'Rename',
+                            f'The name "{text}" already exists, please choose another '
+                            f'name and try again.',
+                            text,
+                        )
+                        if result in (_SKIP, _CANCEL):
+                            return
+
+                        text = result
+                        kwargs['text'] = text
+
+        iid = super(Treeview, self).insert(parent, index, **kwargs)
+
+        child_count = len(self.get_children(parent))
+        if child_count:
+            word = 'item' if child_count == 1 else 'items'
+            self.value_set(_SIZE, f'{len(self.get_children(parent))} {word}', parent)
+        self.see(iid)
+        return iid
+
+    def detach(self, *items):
+        if not items:
+            items = self.selection()
+
+        self.undo_data = {}
+        for item in items:
+            self.undo_data[item] = (self.parent(item), self.index(item))
+
+            parent = self.parent(item)
+            if parent:
+                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
+                word = 'item' if value == 1 else 'items'
+                self.value_set(_SIZE, f'{value} {word}', parent)
+
+        item = self.focus()
+        item = self.prev(item)
+
+        super(Treeview, self).detach(*self.selection())
+
+        self.focus(item)
+        self.selection_add(item)
+        self.tags_reset(excluded='selected')
+
+    def reattach(self, item, parent, index):
+        for idx, column in enumerate(self.columns):
+            if 'unique' in column and column['unique']:
+                if idx:
+                    pass
+                else:
+                    text = self.item(item, 'text')
+                    children = self.get_children(parent)
+
+                    column_values = []
+                    for node in children:
+                        column_values.append(self.item(node, 'text'))
+
+                    for node in children:
+                        while text == self.item(node, 'text'):
+                            result = self.dlg_rename(
+                                'Rename',
+                                f'The name "{text}" already exists, please choose another '
+                                f'name and try again.',
+                                text,
+                            )
+                            if result in (_SKIP, _CANCEL):
+                                return
+
+                            text = result
+                            self.item(item, text=text)
+
+        iid = self.move(item, parent, index)
+
+        return iid
+
+    def wheel_mouse(self, event):
+        if self.active_cell:
+            self.active_cell.destroy()
+            self.active_cell = None
+
+            if not self.item(self.focus(), 'text'):
+                self.delete(self.focus())
+
+        value = 0.1 if event.num == 5 else -0.1
+        self.yview('moveto', self.yview()[0] + value)
+
+        return 'break'
+
+    def single_click(self, _):
+        if self.active_cell:
+            item = self.focus()
+            item_text = self.item(item, 'text')
+            wdg_text = self.active_cell.var.get().strip(' ')
+
+            column = int(self.active_cell.column.lstrip('#'))
+            unique = self.columns[column].get('unique', False)
+
+            self.active_cell.destroy()
+            self.active_cell = None
+
+            if item_text == wdg_text and not item_text:
+                self.delete(item)
+                self.tags_reset()
+                return
+
+            if not item_text and not wdg_text:
+                self.delete(item)
+                self.tags_reset()
+                return
+
+            if not item_text:
+                if unique:
+                    for node in self.get_children(self.parent(item)):
+                        if wdg_text == self.item(node, 'text'):
+                            self.delete(item)
+                            self.tags_reset()
+                            return
+                else:
+                    return
+
+            if unique:
+                for node in self.get_children(self.parent(item)):
+                    if wdg_text == self.item(node, 'text'):
+                        return
+
+            if not column and wdg_text:
+                self.item(self.focus(), text=wdg_text)
+            else:
+                self.value_set(column-1, wdg_text, self.focus())
+
+            self.active_cell = None
+            self.tags_reset()
+
+    def double_click(self, event):
+        region = self.identify_region(event.x, event.y)
+
+        if region == 'tree' or region == 'cell':
+            row = self.identify_row(event.y)
+            column = self.identify_column(event.x)
+
+            self.active_cell = self.popup_widget(row, column)
+            if self.active_cell:
+                self.active_cell.column = column
+                self.active_cell.focus()
+                if isinstance(self.active_cell, Entry):
+                    self.active_cell.select_range(0, tk.END)
+        elif region == 'heading':
+            pass
+            self.after(1, self.tags_reset)
+
+        return 'break'
+
+    def button_release(self, event):
+        self.focus(self.identify('item', event.x, event.y))
+
+    def insert_leaf(self):
+        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
+
+        if not item:
+            parent = ''
+            idx = tk.END
+        elif self.value_get(_TYPE, item) == 'Node':
+            idx = 0
+            parent = item
+        else:
+            idx = self.index(item) + 1
+            parent = self.parent(item)
+
+        iid = self.insert(
+            parent,
+            idx,
+            **{'text': '', 'values': (['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
+        )
+
+        self.focus(iid)
+        self.value_set(_IID, iid, iid)
+        self.tags_reset()
+
+        bbox = self.bbox(iid, '#0')
+        if bbox:
+            event = Event()
+            event.x = bbox[0]
+            event.y = bbox[1] + self.rowheight
+            self.double_click(event)
+
+    def insert_node(self):
+        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
+
+        if not item:
+            parent = ''
+            idx = tk.END
+        elif self.value_get(_TYPE, item) == 'Node':
+            idx = 0
+            parent = item
+        else:
+            idx = self.index(item) + 1
+            parent = self.parent(item)
+
+        iid = self.insert(
+            parent,
+            idx,
+            open=True,
+            **{'text': '', 'values': (['', 'Node', True, '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
+        )
+
+        self.focus(iid)
+        self.value_set(_IID, iid, iid)
+        self.tags_reset()
+
+        bbox = self.bbox(iid, '#0')
+        if bbox:
+            event = Event()
+            event.x = bbox[0]
+            event.y = bbox[1] + self.rowheight
+            self.double_click(event)
+
+    def depth(self, item):
+        depth = 1
+        parent = self.parent(item)
+        while parent:
+            depth += 1
+            parent = self.parent(parent)
+
+        return depth
+
+    def escape(self, _):
+        self.tags_reset()
+        self.selection_remove(*self.selection())
+        self.selection_set(self.focus())
+
+    def shift_up(self, _):
+        rowheight = self.style.lookup('Treeview', 'rowheight')
+
+        focus = self.focus()
+        x, y, _, _ = self.bbox(focus)
+        x += self.winfo_rootx()
+
+        _prev = self.identify('item', x, y-rowheight+1)
+        if _prev:
+            self.see(_prev)
+            self.focus(_prev)
+            self.cursor_offset += 1
+
+            if self.cursor_offset > 0:
+                self.selection_toggle(_prev)
+            else:
+                self.selection_toggle(focus)
+
+            return 'break'
+
+    def shift_down(self, _):
+        rowheight = self.style.lookup('Treeview', 'rowheight')
+
+        focus = self.focus()
+        x, y, _, _ = self.bbox(focus)
+        x += self.winfo_rootx()
+
+        _next = self.identify('item', x, y+rowheight+1)
+        if _next:
+            self.see(_next)
+            self.focus(_next)
+            self.cursor_offset -= 1
+
+            if self.cursor_offset >= 0:
+                self.selection_toggle(focus)
+            else:
+                self.selection_toggle(_next)
+
+            return 'break'
+
+    def populate(self, parent, data=()):
+        for item in data:
+            iid = self.insert(parent, tk.END, **item)
+            self.value_set(_IID, iid, iid)
+
+            if 'children' in item:
+                self.populate(iid, item['children'])
+
+    def serialize(self):
+        def get_data(_item, _data):
+            for node in self.get_children(_item):
+                _item_data = self.item(node)
+                _data.append(_item_data)
+                if self.get_children(node):
+                    _item_data['children'] = []
+                    get_data(node, _item_data['children'])
+
+        data = {'headings': self.headings, 'columns': self.columns, 'data': {}}
+
+        tree_data = []
+        for item in self.get_children():
+            item_data = self.item(item)
+            if self.get_children(item):
+                item_data['children'] = []
+                tree_data.append(item_data)
+                get_data(item, item_data['children'])
+            else:
+                tree_data.append(item_data)
+
+        data['data'] = tree_data
+
+        return data
+
+    def popup_menu(self, event):
+        region = self.identify_region(event.x, event.y)
+        if region == 'heading':
+            return
+
+        if self.active_cell:
+            self.active_cell.destroy()
+            self.active_cell = None
+
+        self.popup.x, self.popup.y = event.x_root, event.y_root
+        item = self.identify('item', event.x, event.y)
+        self.focus(item)
+        self.focus_set()
+        self.popup.tk_popup(event.x_root, event.y_root, 0)
+
+    def popup_widget(self, row, column):
         bbox = self.bbox(row, column)
         if not bbox:
             return
@@ -935,457 +1397,6 @@ class Treeview(ttk.Treeview):
             wdg.bind('<Control-a>', control_a)
 
         return wdg
-
-    def wheel_mouse(self, event):
-        if self.active_cell:
-            self.active_cell.destroy()
-            self.active_cell = None
-
-            if not self.item(self.focus(), 'text'):
-                self.delete(self.focus())
-
-        value = 0.1 if event.num == 5 else -0.1
-        self.yview('moveto', self.yview()[0] + value)
-
-        return 'break'
-
-    def single_click(self, _):
-        if self.active_cell:
-            item = self.focus()
-            item_text = self.item(item, 'text')
-            wdg_text = self.active_cell.var.get().strip(' ')
-
-            column = int(self.active_cell.column.lstrip('#'))
-            unique = self.columns[column].get('unique', False)
-
-            self.active_cell.destroy()
-            self.active_cell = None
-
-            if item_text == wdg_text and not item_text:
-                self.delete(item)
-                self.tags_reset()
-                return
-
-            if not item_text and not wdg_text:
-                self.delete(item)
-                self.tags_reset()
-                return
-
-            if not item_text:
-                if unique:
-                    for node in self.get_children(self.parent(item)):
-                        if wdg_text == self.item(node, 'text'):
-                            self.delete(item)
-                            self.tags_reset()
-                            return
-                else:
-                    return
-
-            if unique:
-                for node in self.get_children(self.parent(item)):
-                    if wdg_text == self.item(node, 'text'):
-                        return
-
-            if not column and wdg_text:
-                self.item(self.focus(), text=wdg_text)
-            else:
-                self.value_set(column-1, wdg_text, self.focus())
-
-            self.active_cell = None
-            self.tags_reset()
-
-    def double_click(self, event):
-        region = self.identify_region(event.x, event.y)
-
-        if region == 'tree' or region == 'cell':
-            row = self.identify_row(event.y)
-            column = self.identify_column(event.x)
-
-            self.active_cell = self.widget_popup(row, column)
-            if self.active_cell:
-                self.active_cell.column = column
-                self.active_cell.focus()
-                if isinstance(self.active_cell, Entry):
-                    self.active_cell.select_range(0, tk.END)
-        elif region == 'heading':
-            pass
-            self.after(1, self.tags_reset)
-
-        return 'break'
-
-    def button_release(self, event):
-        self.focus(self.identify('item', event.x, event.y))
-
-    def cut(self, _=None):
-        def set_selections(_item):
-            self.tag_add('selected', _item)
-            for _item in self.get_children(_item):
-                set_selections(_item)
-
-        selections = list(self.selection())
-        for item in reversed(selections):
-            if self.parent(item) in selections:
-                selections.pop(selections.index(item))
-            else:
-                set_selections(item)
-
-        item = self.focus()
-        item = self.prev(item)
-
-        if not item and self.get_children():
-            item = self.get_children()[0]
-
-        self.undo_data = {}
-        for node in selections:
-            self.undo_data[node] = (self.parent(node), self.index(node))
-
-        self.detach(*selections)
-        self.detached = selections
-
-        self.focus(item)
-        self.selection_add(item)
-        self.tags_reset(excluded='selected')
-
-    def copy(self, _=None):
-        def set_selected(_item):
-            self.selected.append(_item)
-            self.tag_add('selected', _item)
-            self.value_set(_TAGS, str(self.item(_item, 'tags')), _item)
-            if not self.item(_item, 'open'):
-                for node in self.get_children(_item):
-                    set_selected(node)
-
-        if not self.shift:
-            for item in self.tag_has('selected'):
-                self.tag_remove('selected', item)
-                self.value_set(_TAGS, str(self.item(item, 'tags')), item)
-
-        self.selected = []
-        for item in self.selection():
-            set_selected(item)
-
-    def undo(self, _=None):
-        for item, (parent, idx) in self.undo_data.items():
-            self.reattach(item, parent, idx)
-            self.selection_remove(item)
-        self.tags_reset()
-
-    def paste(self, _=None):
-        selections = self.detached if self.detached else self.selected
-
-        if not self.selected and not self.detached:
-            selections = self.tag_has('selected')
-
-        for dst_item in self.selection():
-            if not len(selections) or self.value_get(_TYPE, dst_item) != 'Node':
-                continue
-
-            if self.detached:
-                for item in selections:
-                    self.reattach(item, dst_item, tk.END)
-                self.detached = False
-            else:
-                selected = {}
-                for item in selections:
-                    parent = self.parent(item)
-                    dst = selected[parent] if parent in selected else dst_item
-                    self.value_set(_MODIFIED, datetime.now().strftime("%Y/%m/%d %H:%M:%S"), item)
-
-                    iid = self.insert(dst, **self.item(item))
-                    if iid:
-                        self.value_set(_IID, iid, iid)
-                        self.tag_remove('selected', iid)
-                        selected[item] = iid
-
-            self.tags_reset(excluded='selected')
-            self.selection_remove(self.tag_has('selected'))
-            self.selection_set(self.focus())
-
-    def delete(self, *items):
-        for item in items:
-            parent = self.parent(item)
-            if parent:
-                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
-                word = 'item' if value == 1 else 'items'
-                self.value_set(_SIZE, f'{value} {word}', parent)
-
-        super(Treeview, self).delete(*items)
-
-    def detach(self, *items):
-        if not items:
-            items = self.selection()
-
-        self.undo_data = {}
-        for item in items:
-            self.undo_data[item] = (self.parent(item), self.index(item))
-
-            parent = self.parent(item)
-            if parent:
-                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
-                word = 'item' if value == 1 else 'items'
-                self.value_set(_SIZE, f'{value} {word}', parent)
-
-        item = self.focus()
-        item = self.prev(item)
-
-        super(Treeview, self).detach(*self.selection())
-
-        self.focus(item)
-        self.selection_add(item)
-        self.tags_reset(excluded='selected')
-
-    def reattach(self, item, parent, index):
-        for idx, column in enumerate(self.columns):
-            if 'unique' in column and column['unique']:
-                if idx:
-                    pass
-                else:
-                    text = self.item(item, 'text')
-                    children = self.get_children(parent)
-
-                    column_values = []
-                    for node in children:
-                        column_values.append(self.item(node, 'text'))
-
-                    for node in children:
-                        while text == self.item(node, 'text'):
-                            result = self.dlg_rename(
-                                'Rename',
-                                f'The name "{text}" already exists, please choose another '
-                                f'name and try again.',
-                                text,
-                            )
-                            if result in (_SKIP, _CANCEL):
-                                return
-
-                            text = result
-                            self.item(item, text=text)
-
-        iid = self.move(item, parent, index)
-
-        return iid
-
-    def insert(self, parent, index=tk.END, **kwargs):
-        kwargs.pop('children', None)
-
-        unique_columns = []
-        for idx, c in enumerate(self.columns):
-            if 'unique' in c and c['unique']:
-                unique_columns.append(idx)
-
-        for column in unique_columns:
-            if column:
-                pass
-            else:
-                text = kwargs['text']
-                children = self.get_children(parent)
-
-                column_values = []
-                for node in children:
-                    column_values.append(self.item(node, 'text'))
-
-                for node in children:
-                    while text == self.item(node, 'text'):
-                        result = self.dlg_rename(
-                            'Rename',
-                            f'The name "{text}" already exists, please choose another '
-                            f'name and try again.',
-                            text,
-                        )
-                        if result in (_SKIP, _CANCEL):
-                            return
-
-                        text = result
-                        kwargs['text'] = text
-
-        iid = super(Treeview, self).insert(parent, index, **kwargs)
-
-        child_count = len(self.get_children(parent))
-        if child_count:
-            word = 'item' if child_count == 1 else 'items'
-            self.value_set(_SIZE, f'{len(self.get_children(parent))} {word}', parent)
-        self.see(iid)
-        return iid
-
-    def insert_leaf(self):
-        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
-
-        if not item:
-            parent = ''
-            idx = tk.END
-        elif self.value_get(_TYPE, item) == 'Node':
-            idx = 0
-            parent = item
-        else:
-            idx = self.index(item) + 1
-            parent = self.parent(item)
-
-        iid = self.insert(
-            parent,
-            idx,
-            **{'text': '', 'values': (['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
-        )
-
-        self.focus(iid)
-        self.value_set(_IID, iid, iid)
-        self.tags_reset()
-
-        bbox = self.bbox(iid, '#0')
-        if bbox:
-            event = Event()
-            event.x = bbox[0]
-            event.y = bbox[1] + self.rowheight
-            self.double_click(event)
-
-    def insert_node(self):
-        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
-
-        if not item:
-            parent = ''
-            idx = tk.END
-        elif self.value_get(_TYPE, item) == 'Node':
-            idx = 0
-            parent = item
-        else:
-            idx = self.index(item) + 1
-            parent = self.parent(item)
-
-        iid = self.insert(
-            parent,
-            idx,
-            open=True,
-            **{'text': '', 'values': (['', 'Node', True, '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
-        )
-
-        self.focus(iid)
-        self.value_set(_IID, iid, iid)
-        self.tags_reset()
-
-        bbox = self.bbox(iid, '#0')
-        if bbox:
-            event = Event()
-            event.x = bbox[0]
-            event.y = bbox[1] + self.rowheight
-            self.double_click(event)
-
-    def next(self, item):
-        _next = super(Treeview, self).next(item)
-
-        return _next
-
-    def prev(self, item):
-        _prev = super(Treeview, self).prev(item)
-        if not _prev:
-            parent = self.parent(item)
-            _prev = parent if parent else ''
-
-        return _prev
-
-    def control_a(self, _):
-        def select(_child):
-            self.selection_add(_child)
-            for node in self.get_children(_child):
-                select(node)
-        for child in self.get_children():
-            select(child)
-
-    def key_press(self, event):
-        if 'Shift' in event.keysym:
-            self.shift = True
-            self.cursor_offset = 0
-
-    def key_release(self, event):
-        if 'Shift' in event.keysym:
-            self.shift = False
-
-    def escape(self, _):
-        self.tags_reset()
-        self.selection_remove(*self.selection())
-        self.selection_set(self.focus())
-
-    def shift_up(self, _):
-        rowheight = self.style.lookup('Treeview', 'rowheight')
-
-        focus = self.focus()
-        x, y, _, _ = self.bbox(focus)
-        x += self.winfo_rootx()
-
-        _prev = self.identify('item', x, y-rowheight+1)
-        if _prev:
-            self.see(_prev)
-            self.focus(_prev)
-            self.cursor_offset += 1
-
-            if self.cursor_offset > 0:
-                self.selection_toggle(_prev)
-            else:
-                self.selection_toggle(focus)
-
-            return 'break'
-
-    def shift_down(self, _):
-        rowheight = self.style.lookup('Treeview', 'rowheight')
-
-        focus = self.focus()
-        x, y, _, _ = self.bbox(focus)
-        x += self.winfo_rootx()
-
-        _next = self.identify('item', x, y+rowheight+1)
-        if _next:
-            self.see(_next)
-            self.focus(_next)
-            self.cursor_offset -= 1
-
-            if self.cursor_offset >= 0:
-                self.selection_toggle(focus)
-            else:
-                self.selection_toggle(_next)
-
-            return 'break'
-
-    def populate(self, parent, data=()):
-        for item in data:
-            iid = self.insert(parent, tk.END, **item)
-            self.value_set(_IID, iid, iid)
-
-            if 'children' in item:
-                self.populate(iid, item['children'])
-
-    def serialize(self):
-        def get_data(_item, _data):
-            for node in self.get_children(_item):
-                _item_data = self.item(node)
-                _data.append(_item_data)
-                if self.get_children(node):
-                    _item_data['children'] = []
-                    get_data(node, _item_data['children'])
-
-        data = {'headings': self.headings, 'columns': self.columns, 'data': {}}
-
-        tree_data = []
-        for item in self.get_children():
-            item_data = self.item(item)
-            if self.get_children(item):
-                item_data['children'] = []
-                tree_data.append(item_data)
-                get_data(item, item_data['children'])
-            else:
-                tree_data.append(item_data)
-
-        data['data'] = tree_data
-
-        return data
-
-    def popup_menu(self, event):
-        if self.active_cell:
-            self.active_cell.destroy()
-            self.active_cell = None
-
-        self.popup.x, self.popup.y = event.x_root, event.y_root
-        item = self.identify('item', event.x, event.y)
-        self.focus(item)
-        self.focus_set()
-        self.popup.tk_popup(event.x_root, event.y_root, 0)
 
     def bindings_set(self):
         bindings = {
