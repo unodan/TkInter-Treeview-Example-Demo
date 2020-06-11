@@ -5,6 +5,7 @@ import tkinter.font as tkfont
 
 from datetime import datetime
 from os import path, makedirs
+
 ABS_PATH = path.dirname(path.realpath(__file__))
 
 _IID = 0
@@ -90,7 +91,6 @@ class App(tk.Tk):
             tv_heading_padding = 5
             tv_heading_border_width = 2
             font = tkfont.nametofont('TkDefaultFont')
-            font_width = font.measure('W')
             self.linespace = font.metrics('linespace')
             row_height = self.linespace + tv_line_padding
             tv_indent = row_height
@@ -220,6 +220,11 @@ class App(tk.Tk):
                     #     data['columns'][idx]['mode'] = self.treeview.columns[idx]['mode']
 
                 json.dump(data, f, indent=3)
+
+
+class Test(tk.Event):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
 
 
 class Event:
@@ -501,14 +506,15 @@ class Treeview(ttk.Treeview):
 
         self.shift = \
             self.popup = \
-            self.selected = \
-            self.menu_background = \
-            self.prev_column = \
-            self.active_cell = \
-            self.cursor_offset = \
             self.scroll_x = \
             self.scroll_y = \
-            self.dlg_results = None
+            self.selected = \
+            self.dlg_results = \
+            self.active_popup_widget = \
+            self.active_popup_row = \
+            self.active_popup_column = \
+            self.cursor_offset = \
+            self.menu_background = None
 
         self.style = ttk.Style()
 
@@ -713,9 +719,9 @@ class Treeview(ttk.Treeview):
         dlg.button_skip.config(command=skip)
         dlg.button_cancel.config(command=cancel)
 
-        if self.active_cell:
-            x = self.active_cell.winfo_rootx()
-            y = self.active_cell.winfo_rooty()
+        if self.active_popup_widget:
+            x = self.active_popup_widget.winfo_rootx()
+            y = self.active_popup_widget.winfo_rooty()
         else:
             bbox = self.bbox(self.focus())
             x, y, _, _ = bbox
@@ -752,9 +758,9 @@ class Treeview(ttk.Treeview):
         dlg.button_ok.bind('<Return>', ok)
         dlg.button_ok.bind('<KP_Enter>', ok)
 
-        if self.active_cell:
-            x = self.active_cell.winfo_rootx()
-            y = self.active_cell.winfo_rooty()
+        if self.active_popup_widget:
+            x = self.active_popup_widget.winfo_rootx()
+            y = self.active_popup_widget.winfo_rooty()
         else:
             bbox = self.bbox(self.focus())
             x, y, _, _ = bbox
@@ -779,7 +785,8 @@ class Treeview(ttk.Treeview):
 
     def next(self, item):
         _next = super(Treeview, self).next(item)
-
+        if not _next and self.next(self.parent(item)):
+            _next = self.next(self.parent(item))
         return _next
 
     def prev(self, item):
@@ -790,23 +797,77 @@ class Treeview(ttk.Treeview):
 
         return _prev
 
-    def select(self, _):
-        item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery() - self.winfo_rooty())
-        self.focus(item)
-
-    def expand(self, _):
+    def expand_tree(self, _):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
             self.value_set(_OPEN, True, item)
             self.tags_reset(excluded='selected')
         self.after(1, func)
 
-    def collapse(self, _=None):
+    def collapse_tree(self, _=None):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
             self.value_set(_OPEN, False, item)
             self.tags_reset(excluded='selected')
         self.after(1, func)
+
+    def expand_column(self, event):
+        def walk(_children):
+            _largest = 0
+            idx = int(column.lstrip('#'))-1
+
+            for child in _children:
+                if column == '#0':
+                    _text = self.item(child, 'text')
+                elif len(self.item(child, 'values')) > 1:
+                    _text = self.item(child, 'values')[idx]
+                else:
+                    continue
+
+                _length = font.measure(_text) + (indent * self.depth(child)) if column == '#0' else font.measure(_text)
+
+                if _length > _largest:
+                    _largest = _length
+
+                _children = self.get_children(child)
+                if not _children or not int(self.item(child, 'open')):
+                    continue
+
+                _length = walk(_children)
+                if _length > _largest:
+                    _largest = _length
+
+            return _largest
+
+        region = self.identify('region', event.x, event.y)
+
+        if region != 'separator':
+            return
+
+        largest = 0
+        column = self.identify('column', event.x, event.y)
+        font = tkfont.nametofont('TkTextFont')
+        font_width = font.measure('W')
+        row_height = font.metrics('linespace')
+        indent = row_height + font_width
+
+        self.style.configure(".", indicatorsize=row_height)
+        self.style.configure('Treeview', indent=indent)
+
+        for item in self.get_children():
+            text = self.item(item, 'text') if column == '#0' else self.item(item, 'values')[0]
+            length = font.measure(text)+indent
+            largest = length if length > largest else largest
+
+            children = self.get_children(item)
+            if not children or not int(self.item(item, 'open')):
+                continue
+
+            length = walk(children)
+            if length > largest:
+                largest = length
+
+        self.column(column, width=largest+font_width)
 
     def cut(self, _=None):
         def set_selections(_item):
@@ -903,23 +964,6 @@ class Treeview(ttk.Treeview):
 
         super(Treeview, self).delete(*items)
 
-    def control_a(self, _):
-        def select(_child):
-            self.selection_add(_child)
-            for node in self.get_children(_child):
-                select(node)
-        for child in self.get_children():
-            select(child)
-
-    def key_press(self, event):
-        if 'Shift' in event.keysym:
-            self.shift = True
-            self.cursor_offset = 0
-
-    def key_release(self, event):
-        if 'Shift' in event.keysym:
-            self.shift = False
-
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
 
@@ -961,6 +1005,68 @@ class Treeview(ttk.Treeview):
             self.value_set(_SIZE, f'{len(self.get_children(parent))} {word}', parent)
         self.see(iid)
         return iid
+
+    def escape(self, _):
+        self.tags_reset()
+        self.selection_remove(*self.selection())
+        self.selection_set(self.focus())
+
+    def control_a(self, _):
+        def select(_child):
+            self.selection_add(_child)
+            for node in self.get_children(_child):
+                select(node)
+        for child in self.get_children():
+            select(child)
+
+    def shift_up(self, _):
+        rowheight = self.style.lookup('Treeview', 'rowheight')
+
+        focus = self.focus()
+        x, y, _, _ = self.bbox(focus)
+        x += self.winfo_rootx()
+
+        _prev = self.identify('item', x, y-rowheight+1)
+        if _prev:
+            self.see(_prev)
+            self.focus(_prev)
+            self.cursor_offset += 1
+
+            if self.cursor_offset > 0:
+                self.selection_toggle(_prev)
+            else:
+                self.selection_toggle(focus)
+
+            return 'break'
+
+    def shift_down(self, _):
+        rowheight = self.style.lookup('Treeview', 'rowheight')
+
+        focus = self.focus()
+        x, y, _, _ = self.bbox(focus)
+        x += self.winfo_rootx()
+
+        _next = self.identify('item', x, y+rowheight+1)
+        if _next:
+            self.see(_next)
+            self.focus(_next)
+            self.cursor_offset -= 1
+
+            if self.cursor_offset >= 0:
+                self.selection_toggle(focus)
+            else:
+                self.selection_toggle(_next)
+
+            return 'break'
+
+    def key_press(self, event):
+        if 'Shift' in event.keysym:
+            self.shift = True
+            self.cursor_offset = 0
+
+    def key_release(self, event):
+        if 'Shift' in event.keysym:
+            self.shift = False
 
     def detach(self, *items):
         if not items:
@@ -1017,29 +1123,27 @@ class Treeview(ttk.Treeview):
         return iid
 
     def wheel_mouse(self, event):
-        if self.active_cell:
-            self.active_cell.destroy()
-            self.active_cell = None
+        if not self.item(self.focus(), 'text'):
+            self.delete(self.focus())
 
-            if not self.item(self.focus(), 'text'):
-                self.delete(self.focus())
-
-        value = 0.1 if event.num == 5 else -0.1
+        value = -0.1/3 if event.num == 5 else 0.1/3
         self.yview('moveto', self.yview()[0] + value)
+
+        self.popup_widget_place()
 
         return 'break'
 
     def single_click(self, _):
-        if self.active_cell:
+        if self.active_popup_widget:
             item = self.focus()
             item_text = self.item(item, 'text')
-            wdg_text = self.active_cell.var.get().strip(' ')
+            wdg_text = self.active_popup_widget.var.get().strip(' ')
 
-            column = int(self.active_cell.column.lstrip('#'))
+            column = int(self.active_popup_column.lstrip('#'))
             unique = self.columns[column].get('unique', False)
 
-            self.active_cell.destroy()
-            self.active_cell = None
+            self.active_popup_widget.destroy()
+            self.active_popup_widget = None
 
             if item_text == wdg_text and not item_text:
                 self.delete(item)
@@ -1071,7 +1175,7 @@ class Treeview(ttk.Treeview):
             else:
                 self.value_set(column-1, wdg_text, self.focus())
 
-            self.active_cell = None
+            self.active_popup_widget = None
             self.tags_reset()
 
     def double_click(self, event):
@@ -1081,12 +1185,20 @@ class Treeview(ttk.Treeview):
             row = self.identify_row(event.y)
             column = self.identify_column(event.x)
 
-            self.active_cell = self.popup_widget(row, column)
-            if self.active_cell:
-                self.active_cell.column = column
-                self.active_cell.focus()
-                if isinstance(self.active_cell, Entry):
-                    self.active_cell.select_range(0, tk.END)
+            if self.active_popup_widget:
+                self.active_popup_widget.destroy()
+
+            self.active_popup_widget = self.popup_widget(row, column)
+            self.active_popup_row = row
+            self.active_popup_column = column
+
+            if self.active_popup_widget:
+                self.active_popup_widget.column = column
+                self.active_popup_widget.focus()
+                if isinstance(self.active_popup_widget, Entry):
+                    self.active_popup_widget.select_range(0, tk.END)
+        elif region == 'separator':
+            self.expand_column(event)
         elif region == 'heading':
             pass
             self.after(1, self.tags_reset)
@@ -1096,35 +1208,14 @@ class Treeview(ttk.Treeview):
     def button_release(self, event):
         self.focus(self.identify('item', event.x, event.y))
 
-    def insert_leaf(self):
-        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
+    def depth(self, item):
+        depth = 1
+        parent = self.parent(item)
+        while parent:
+            depth += 1
+            parent = self.parent(parent)
 
-        if not item:
-            parent = ''
-            idx = tk.END
-        elif self.value_get(_TYPE, item) == 'Node':
-            idx = 0
-            parent = item
-        else:
-            idx = self.index(item) + 1
-            parent = self.parent(item)
-
-        iid = self.insert(
-            parent,
-            idx,
-            **{'text': '', 'values': (['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
-        )
-
-        self.focus(iid)
-        self.value_set(_IID, iid, iid)
-        self.tags_reset()
-
-        bbox = self.bbox(iid, '#0')
-        if bbox:
-            event = Event()
-            event.x = bbox[0]
-            event.y = bbox[1] + self.rowheight
-            self.double_click(event)
+        return depth
 
     def insert_node(self):
         item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
@@ -1157,59 +1248,35 @@ class Treeview(ttk.Treeview):
             event.y = bbox[1] + self.rowheight
             self.double_click(event)
 
-    def depth(self, item):
-        depth = 1
-        parent = self.parent(item)
-        while parent:
-            depth += 1
-            parent = self.parent(parent)
+    def insert_leaf(self):
+        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
 
-        return depth
+        if not item:
+            parent = ''
+            idx = tk.END
+        elif self.value_get(_TYPE, item) == 'Node':
+            idx = 0
+            parent = item
+        else:
+            idx = self.index(item) + 1
+            parent = self.parent(item)
 
-    def escape(self, _):
+        iid = self.insert(
+            parent,
+            idx,
+            **{'text': '', 'values': (['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H-%M-%S"), ''])},
+        )
+
+        self.focus(iid)
+        self.value_set(_IID, iid, iid)
         self.tags_reset()
-        self.selection_remove(*self.selection())
-        self.selection_set(self.focus())
 
-    def shift_up(self, _):
-        rowheight = self.style.lookup('Treeview', 'rowheight')
-
-        focus = self.focus()
-        x, y, _, _ = self.bbox(focus)
-        x += self.winfo_rootx()
-
-        _prev = self.identify('item', x, y-rowheight+1)
-        if _prev:
-            self.see(_prev)
-            self.focus(_prev)
-            self.cursor_offset += 1
-
-            if self.cursor_offset > 0:
-                self.selection_toggle(_prev)
-            else:
-                self.selection_toggle(focus)
-
-            return 'break'
-
-    def shift_down(self, _):
-        rowheight = self.style.lookup('Treeview', 'rowheight')
-
-        focus = self.focus()
-        x, y, _, _ = self.bbox(focus)
-        x += self.winfo_rootx()
-
-        _next = self.identify('item', x, y+rowheight+1)
-        if _next:
-            self.see(_next)
-            self.focus(_next)
-            self.cursor_offset -= 1
-
-            if self.cursor_offset >= 0:
-                self.selection_toggle(focus)
-            else:
-                self.selection_toggle(_next)
-
-            return 'break'
+        bbox = self.bbox(iid, '#0')
+        if bbox:
+            event = Event()
+            event.x = bbox[0]
+            event.y = bbox[1] + self.rowheight
+            self.double_click(event)
 
     def populate(self, parent, data=()):
         for item in data:
@@ -1249,9 +1316,9 @@ class Treeview(ttk.Treeview):
         if region == 'heading':
             return
 
-        if self.active_cell:
-            self.active_cell.destroy()
-            self.active_cell = None
+        if self.active_popup_widget:
+            self.active_popup_widget.destroy()
+            self.active_popup_widget = None
 
         self.popup.x, self.popup.y = event.x_root, event.y_root
         item = self.identify('item', event.x, event.y)
@@ -1260,6 +1327,8 @@ class Treeview(ttk.Treeview):
         self.popup.tk_popup(event.x_root, event.y_root, 0)
 
     def popup_widget(self, row, column):
+        if not row or not column:
+            return
         bbox = self.bbox(row, column)
         if not bbox:
             return
@@ -1293,14 +1362,14 @@ class Treeview(ttk.Treeview):
 
                     if not item_text and not wdg_text:
                         wdg.destroy()
-                        self.active_cell = None
+                        self.active_popup_widget = None
                         self.delete(_item)
                         return
 
                     elif item_text and not wdg_text:
                         self.item(_item, text=item_text)
                         wdg.destroy()
-                        self.active_cell = None
+                        self.active_popup_widget = None
                         return
 
                     if not col:
@@ -1331,13 +1400,13 @@ class Treeview(ttk.Treeview):
                         self.value_set(col-1, wdg.get(), _item)
 
                 wdg.destroy()
-                self.active_cell = None
+                self.active_popup_widget = None
                 self.tags_reset()
                 self.selection_set(_item)
 
             def destroy(_=None):
                 wdg.destroy()
-                self.active_cell = None
+                self.active_popup_widget = None
 
                 _item = self.focus()
                 _text = self.item(_item, 'text')
@@ -1354,7 +1423,7 @@ class Treeview(ttk.Treeview):
 
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
-                wdg.place(x=x-1, y=y, anchor='w', width=width)
+                wdg.place(x=x+4, y=y, anchor='w', width=width-4)
                 wdg.var.set(text)
                 wdg.icursor(tk.END)
 
@@ -1375,7 +1444,7 @@ class Treeview(ttk.Treeview):
 
             def destroy(_=None):
                 wdg.destroy()
-                self.active_cell = None
+                self.active_popup_widget = None
 
             def control_a(_=None):
                 def func():
@@ -1386,7 +1455,7 @@ class Treeview(ttk.Treeview):
             state = '' if mode == tk.WRITABLE else 'readonly'
             values = self.columns[col].get('values', '')
             wdg = Combobox(self, state=state, values=values)
-            wdg.place(x=x-1, y=y, anchor='w', width=width)
+            wdg.place(x=x, y=y, anchor='w', width=width-2)
             wdg.var.set(text)
             wdg.icursor(tk.END)
 
@@ -1397,6 +1466,30 @@ class Treeview(ttk.Treeview):
             wdg.bind('<Control-a>', control_a)
 
         return wdg
+
+    def popup_widget_place(self, _=None):
+        bbox = self.bbox(self.focus())
+        if not bbox and self.active_popup_widget:
+            self.active_popup_widget.destroy()
+            self.active_popup_widget = None
+        elif not self.active_popup_widget:
+            self.active_popup_widget = self.popup_widget(self.active_popup_row, self.active_popup_column)
+        elif self.active_popup_widget:
+            x, y, width, height = self.bbox(self.active_popup_row, self.active_popup_column)
+            y += height // 2
+
+            if self.active_popup_column == '#0':
+                x += self.indent / 2
+                width -= self.indent / 2 + 1
+            else:
+                x += 1
+
+            self.active_popup_widget.place(x=x+4, y=y, anchor='w', width=width-4)
+
+    def popup_widget_remove(self, _=None):
+        if self.active_popup_widget:
+            self.active_popup_widget.destroy()
+            self.active_popup_widget = None
 
     def bindings_set(self):
         bindings = {
@@ -1416,10 +1509,12 @@ class Treeview(ttk.Treeview):
             '<Control-c>': self.copy,
             '<Control-v>': self.paste,
             '<Control-z>': self.undo,
+            '<Configure>': self.popup_widget_remove,
+
             '<ButtonPress-3>': self.popup_menu,
             # '<<TreeviewSelect>>': self.select,
-            '<<TreeviewOpen>>': self.expand,
-            '<<TreeviewClose>>': self.collapse,
+            '<<TreeviewOpen>>': self.expand_tree,
+            '<<TreeviewClose>>': self.collapse_tree,
         }
         for command, callback in bindings.items():
             self.bind(command, callback)
