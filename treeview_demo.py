@@ -1360,7 +1360,7 @@ class Treeview(ttk.Treeview):
 
                 return 'break'
 
-            def enter(_):
+            def update(_):
                 _item = self.focus()
                 wdg_text = wdg.var.get().strip(' ')
                 item_text = self.item(_item, 'text')
@@ -1409,6 +1409,7 @@ class Treeview(ttk.Treeview):
                 wdg.destroy()
                 self.active_popup_widget = None
                 self.tags_reset()
+                self.focus_set()
                 self.selection_set(_item)
 
             def destroy(_=None):
@@ -1420,7 +1421,9 @@ class Treeview(ttk.Treeview):
                 self.tags_reset()
                 if not _text:
                     self.delete(item)
+
                 self.tags_reset()
+                self.focus_set()
 
             def control_a(_=None):
                 def func():
@@ -1428,16 +1431,43 @@ class Treeview(ttk.Treeview):
                     wdg.icursor(tk.END)
                 self.after(1, func)
 
+            def move_focus(event):
+                if event.keysym == 'Up':
+                    update(event)
+                    _item = self.focus()
+
+                    wdg.destroy()
+                    self.active_popup_widget = None
+                    self.focus_set()
+                    prev = self.prev(self.focus())
+                    if prev:
+                        self.selection_set(prev)
+                        self.focus(prev)
+
+                else:
+                    update(event)
+                    _item = self.focus()
+
+                    wdg.destroy()
+                    self.active_popup_widget = None
+                    self.focus_set()
+                    _next = self.next(self.focus())
+                    if _next:
+                        self.selection_set(_next)
+                        self.focus(_next)
+
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
                 wdg.place(x=x+4, y=y, anchor='w', width=width-4)
                 wdg.var.set(text)
                 wdg.icursor(tk.END)
 
+                wdg.bind('<Up>', move_focus)
+                wdg.bind('<Down>', move_focus)
                 wdg.bind('<Tab>', tab)
                 wdg.bind('<Control-ISO_Left_Tab>', tab)
-                wdg.bind('<Return>', enter)
-                wdg.bind('<KP_Enter>', enter)
+                wdg.bind('<Return>', update)
+                wdg.bind('<KP_Enter>', update)
                 wdg.bind('<Escape>', destroy)
                 wdg.bind('<Control-z>', destroy)
                 wdg.bind('<Control-a>', control_a)
@@ -1455,7 +1485,7 @@ class Treeview(ttk.Treeview):
 
                 return 'break'
 
-            def enter(_):
+            def update(_):
                 _text = wdg.get().strip(' ')
                 if not col:
                     self.item(self.focus(), text=_text)
@@ -1463,9 +1493,12 @@ class Treeview(ttk.Treeview):
                     self.value_set(col-1, _text, self.focus())
                 destroy()
 
+                self.focus_set()
+
             def destroy(_=None):
                 wdg.destroy()
                 self.active_popup_widget = None
+                self.focus_set()
 
             def control_a(_=None):
                 def func():
@@ -1482,13 +1515,24 @@ class Treeview(ttk.Treeview):
 
             wdg.bind('<Tab>', tab)
             wdg.bind('<Control-ISO_Left_Tab>', tab)
-            wdg.bind('<Return>', enter)
-            wdg.bind('<KP_Enter>', enter)
+            wdg.bind('<Return>', update)
+            wdg.bind('<KP_Enter>', update)
             wdg.bind('<Escape>', destroy)
             wdg.bind('<Control-z>', destroy)
             wdg.bind('<Control-a>', control_a)
 
         return wdg
+
+    def popup_edit(self, _):
+        self.active_popup_widget = self.popup_widget(self.focus(), '#0')
+        self.active_popup_widget.select_range(0, tk.END)
+        self.active_popup_widget.icursor(tk.END)
+        self.active_popup_widget.focus_set()
+
+    def popup_destroy(self, _):
+        if self.active_popup_widget:
+            self.active_popup_widget.destroy()
+            self.active_popup_widget = None
 
     def popup_widget_remove(self, _=None):
         if self.active_popup_widget:
@@ -1497,8 +1541,12 @@ class Treeview(ttk.Treeview):
 
     def bindings_set(self):
         bindings = {
+            '<Up>': self.popup_destroy,
+            '<Down>': self.popup_destroy,
             '<Key>': self.key_press,
             '<Escape>': self.escape,
+            '<Return>': self.popup_edit,
+            '<KP_Enter>': self.popup_edit,
             '<Button-1>': self.button_single_click,
             '<Button-4>': self.wheel_mouse,
             '<Button-5>': self.wheel_mouse,
