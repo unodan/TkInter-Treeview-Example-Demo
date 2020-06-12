@@ -105,11 +105,11 @@ class App(tk.Tk):
             file = path.join(ABS_PATH, 'treeview.json')
             if path.exists(file):
                 with open(file) as f:
-                    data = json.load(f)
+                    setup = json.load(f)
             else:
                 now = datetime.now()
                 dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
-                data = {
+                setup = {
                     'headings': (
                         {'text': 'Name', 'anchor': tk.W},
                         {'text': 'IID', 'anchor': tk.W},
@@ -152,14 +152,12 @@ class App(tk.Tk):
                              {'text': 'photo6.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
                          )},
                     ),
-                    'settings': (),
                 }
 
-            tree = self.treeview = Treeview(self.frame, setup=data)
+            tree = self.treeview = Treeview(self.frame, setup=setup)
             tree.focus_set()
 
-            settings = dict(data['settings'])
-
+            settings = dict(setup.get('settings', ()))
             item = settings.get('focus', None)
             if (not item or not tree.exists(item)) and tree.get_children():
                 item = tree.get_children()[0]
