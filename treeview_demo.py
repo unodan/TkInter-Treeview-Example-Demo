@@ -3,8 +3,9 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.font as tkfont
 
-from datetime import datetime
 from os import path, makedirs
+from sys import platform
+from datetime import datetime
 
 ABS_PATH = path.dirname(path.realpath(__file__))
 
@@ -64,6 +65,10 @@ class App(tk.Tk):
 
         self.title('Treeview Demo')
         self.protocol('WM_DELETE_WINDOW', self.exit)
+
+        self.platform = platform
+        if platform == "linux" or platform == "linux2":
+            self.platform = 'linux'
 
         self.setup()
 
@@ -1470,7 +1475,7 @@ class Treeview(ttk.Treeview):
                     '<Up>': move_focus,
                     '<Down>': move_focus,
                     '<Tab>': tab,
-                    '<Control-ISO_Left_Tab>': tab,
+                    # '<Control-ISO_Left_Tab>': tab,
                     '<Return>': update,
                     '<KP_Enter>': update,
                     '<Escape>': destroy,
@@ -1522,7 +1527,7 @@ class Treeview(ttk.Treeview):
 
             bindings = {
                 '<Tab>': tab,
-                '<Control-ISO_Left_Tab>': tab,
+                # '<Control-ISO_Left_Tab>': tab,
                 '<Return>': update,
                 '<KP_Enter>': update,
                 '<Escape>': destroy,
