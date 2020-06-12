@@ -710,9 +710,6 @@ class Treeview(ttk.Treeview):
             self.item(item, values=values)
 
     def dlg_rename(self, title, message, current_name):
-        def rename(_=None):
-            self.dlg_results = dlg.entry.var.get()
-            dlg.destroy()
 
         def skip(_=None):
             self.dlg_results = _SKIP
@@ -722,12 +719,22 @@ class Treeview(ttk.Treeview):
             self.dlg_results = _CANCEL
             dlg.destroy()
 
+        def rename(_=None):
+            self.dlg_results = dlg.entry.var.get()
+            dlg.destroy()
+
         root = self.winfo_toplevel()
         dlg = RenameDialog(root, width=320, height=150, title=title, message=message)
         dlg.update_idletasks()
         dlg.label.config(wraplength=dlg.container.winfo_width())
         dlg.button_rename.focus()
         dlg.entry.var.set(current_name)
+        dlg.entry.select_range(0, tk.END)
+        dlg.entry.icursor(tk.END)
+        dlg.entry.focus_set()
+
+        dlg.bind('<Return>', rename)
+        dlg.bind('<KP_Enter>', rename)
 
         dlg.button_rename.config(command=rename)
         dlg.button_skip.config(command=skip)
@@ -1405,11 +1412,17 @@ class Treeview(ttk.Treeview):
                                         f'name and try again.',
                                         wdg_text,
                                     )
+                                    if result == '':
+                                        continue
+                                        
                                     if result in (_SKIP, _CANCEL):
                                         return
 
                                     wdg_text = result
                                     self.item(item, text=text)
+
+                                if wdg_text == self.item(node, 'text'):
+                                    return
 
                         self.item(_item, text=wdg_text)
                     else:
