@@ -597,6 +597,24 @@ class Treeview(ttk.Treeview):
         set_rows_columns()
         self.after(1, self.tags_reset)
 
+    def next(self, item):
+        if self.item(item, 'open') and self.get_children(item):
+            _next = self.get_children(item)[0]
+            return _next
+
+        _next = super(Treeview, self).next(item)
+        if not _next and self.next(self.parent(item)):
+            _next = self.next(self.parent(item))
+        return _next
+
+    def prev(self, item):
+        _prev = super(Treeview, self).prev(item)
+        if not _prev:
+            parent = self.parent(item)
+            _prev = parent if parent else ''
+
+        return _prev
+
     def tag_add(self, tags, item):
         self.tags_update('add', tags, item)
 
@@ -726,7 +744,7 @@ class Treeview(ttk.Treeview):
             if size > widest:
                 widest = size + font.measure('W')
 
-        x += (widest + font.measure('W') + self.indent * self.depth(self.focus()))
+        x += (widest + font.measure('W') + self.indent * self.item_depth(self.focus()))
         y += self.rowheight + self.rowheight // 2
 
         dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
@@ -773,92 +791,6 @@ class Treeview(ttk.Treeview):
         dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
 
         root.wait_window(dlg)
-
-    def next(self, item):
-        _next = super(Treeview, self).next(item)
-        if not _next and self.next(self.parent(item)):
-            _next = self.next(self.parent(item))
-        return _next
-
-    def prev(self, item):
-        _prev = super(Treeview, self).prev(item)
-        if not _prev:
-            parent = self.parent(item)
-            _prev = parent if parent else ''
-
-        return _prev
-
-    def expand_tree(self, _):
-        def func():
-            item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_set(_OPEN, True, item)
-            self.tags_reset(excluded='selected')
-        self.after(1, func)
-
-    def collapse_tree(self, _=None):
-        def func():
-            item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_set(_OPEN, False, item)
-            self.tags_reset(excluded='selected')
-        self.after(1, func)
-
-    def expand_column(self, event):
-        def walk(_children):
-            _largest = 0
-            idx = int(column.lstrip('#'))-1
-
-            for child in _children:
-                if column == '#0':
-                    _text = self.item(child, 'text')
-                elif len(self.item(child, 'values')) > 1:
-                    _text = self.item(child, 'values')[idx]
-                else:
-                    continue
-
-                _length = font.measure(_text) + (indent * self.depth(child)) if column == '#0' else font.measure(_text)
-
-                if _length > _largest:
-                    _largest = _length
-
-                _children = self.get_children(child)
-                if not _children or not int(self.item(child, 'open')):
-                    continue
-
-                _length = walk(_children)
-                if _length > _largest:
-                    _largest = _length
-
-            return _largest
-
-        region = self.identify('region', event.x, event.y)
-
-        if region != 'separator':
-            return
-
-        largest = 0
-        column = self.identify('column', event.x, event.y)
-        font = tkfont.nametofont('TkTextFont')
-        font_width = font.measure('W')
-        row_height = font.metrics('linespace')
-        indent = row_height + font_width
-
-        self.style.configure(".", indicatorsize=row_height)
-        self.style.configure('Treeview', indent=indent)
-
-        for item in self.get_children():
-            text = self.item(item, 'text') if column == '#0' else self.item(item, 'values')[0]
-            length = font.measure(text)+indent
-            largest = length if length > largest else largest
-
-            children = self.get_children(item)
-            if not children or not int(self.item(item, 'open')):
-                continue
-
-            length = walk(children)
-            if length > largest:
-                largest = length
-
-        self.column(column, width=largest+font_width)
 
     def cut(self, _=None):
         def set_selections(_item):
@@ -1059,6 +991,78 @@ class Treeview(ttk.Treeview):
         if 'Shift' in event.keysym:
             self.shift = False
 
+    def expand_tree(self, _):
+        def func():
+            item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
+            self.value_set(_OPEN, True, item)
+            self.tags_reset(excluded='selected')
+        self.after(1, func)
+
+    def collapse_tree(self, _=None):
+        def func():
+            item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
+            self.value_set(_OPEN, False, item)
+            self.tags_reset(excluded='selected')
+        self.after(1, func)
+
+    def column_expand(self, event):
+        def walk(_children):
+            _largest = 0
+            idx = int(column.lstrip('#'))-1
+
+            for child in _children:
+                if column == '#0':
+                    _text = self.item(child, 'text')
+                elif len(self.item(child, 'values')) > 1:
+                    _text = self.item(child, 'values')[idx]
+                else:
+                    continue
+
+                _length = font.measure(_text) + (indent * self.item_depth(child)) if column == '#0' else font.measure(_text)
+
+                if _length > _largest:
+                    _largest = _length
+
+                _children = self.get_children(child)
+                if not _children or not int(self.item(child, 'open')):
+                    continue
+
+                _length = walk(_children)
+                if _length > _largest:
+                    _largest = _length
+
+            return _largest
+
+        region = self.identify('region', event.x, event.y)
+
+        if region != 'separator':
+            return
+
+        largest = 0
+        column = self.identify('column', event.x, event.y)
+        font = tkfont.nametofont('TkTextFont')
+        font_width = font.measure('W')
+        row_height = font.metrics('linespace')
+        indent = row_height + font_width
+
+        self.style.configure(".", indicatorsize=row_height)
+        self.style.configure('Treeview', indent=indent)
+
+        for item in self.get_children():
+            text = self.item(item, 'text') if column == '#0' else self.item(item, 'values')[0]
+            length = font.measure(text)+indent
+            largest = length if length > largest else largest
+
+            children = self.get_children(item)
+            if not children or not int(self.item(item, 'open')):
+                continue
+
+            length = walk(children)
+            if length > largest:
+                largest = length
+
+        self.column(column, width=largest+font_width)
+
     def detach(self, *items):
         if not items:
             items = self.selection()
@@ -1122,10 +1126,7 @@ class Treeview(ttk.Treeview):
 
         return 'break'
 
-    def button_release(self, event):
-        self.focus(self.identify('item', event.x, event.y))
-
-    def button_single_click(self, _):
+    def button_click(self, _):
 
         if self.active_popup_widget:
             item = self.focus()
@@ -1171,6 +1172,9 @@ class Treeview(ttk.Treeview):
             self.active_popup_widget = None
             self.tags_reset()
 
+    def button_release(self, event):
+        self.focus(self.identify('item', event.x, event.y))
+
     def button_double_click(self, event):
 
         region = self.identify_region(event.x, event.y)
@@ -1191,14 +1195,14 @@ class Treeview(ttk.Treeview):
                         self.active_popup_widget.select_range(0, tk.END)
 
         elif region == 'separator':
-            self.expand_column(event)
+            self.column_expand(event)
         elif region == 'heading':
             pass
             self.after(1, self.tags_reset)
 
         return 'break'
 
-    def depth(self, item):
+    def item_depth(self, item):
         depth = 1
         parent = self.parent(item)
         while parent:
@@ -1462,15 +1466,19 @@ class Treeview(ttk.Treeview):
                 wdg.var.set(text)
                 wdg.icursor(tk.END)
 
-                wdg.bind('<Up>', move_focus)
-                wdg.bind('<Down>', move_focus)
-                wdg.bind('<Tab>', tab)
-                wdg.bind('<Control-ISO_Left_Tab>', tab)
-                wdg.bind('<Return>', update)
-                wdg.bind('<KP_Enter>', update)
-                wdg.bind('<Escape>', destroy)
-                wdg.bind('<Control-z>', destroy)
-                wdg.bind('<Control-a>', control_a)
+                bindings = {
+                    '<Up>': move_focus,
+                    '<Down>': move_focus,
+                    '<Tab>': tab,
+                    '<Control-ISO_Left_Tab>': tab,
+                    '<Return>': update,
+                    '<KP_Enter>': update,
+                    '<Escape>': destroy,
+                    '<Control-z>': destroy,
+                    '<Control-a>': control_a,
+                }
+                for command, callback in bindings.items():
+                    wdg.bind(command, callback)
 
         elif _type == 'Combobox':
             def tab(_):
@@ -1492,7 +1500,6 @@ class Treeview(ttk.Treeview):
                 else:
                     self.value_set(col-1, _text, self.focus())
                 destroy()
-
                 self.focus_set()
 
             def destroy(_=None):
@@ -1513,28 +1520,30 @@ class Treeview(ttk.Treeview):
             wdg.var.set(text)
             wdg.icursor(tk.END)
 
-            wdg.bind('<Tab>', tab)
-            wdg.bind('<Control-ISO_Left_Tab>', tab)
-            wdg.bind('<Return>', update)
-            wdg.bind('<KP_Enter>', update)
-            wdg.bind('<Escape>', destroy)
-            wdg.bind('<Control-z>', destroy)
-            wdg.bind('<Control-a>', control_a)
+            bindings = {
+                '<Tab>': tab,
+                '<Control-ISO_Left_Tab>': tab,
+                '<Return>': update,
+                '<KP_Enter>': update,
+                '<Escape>': destroy,
+                '<Control-z>': destroy,
+                '<Control-a>': control_a,
+            }
+            for command, callback in bindings.items():
+                wdg.bind(command, callback)
 
         return wdg
 
-    def popup_edit(self, _):
+    def popup_widget_edit(self, _):
         self.active_popup_widget = self.popup_widget(self.focus(), '#0')
         self.active_popup_widget.select_range(0, tk.END)
         self.active_popup_widget.icursor(tk.END)
         self.active_popup_widget.focus_set()
+        self.active_popup_column = '#0'
+
+        return 'break'
 
     def popup_destroy(self, _):
-        if self.active_popup_widget:
-            self.active_popup_widget.destroy()
-            self.active_popup_widget = None
-
-    def popup_widget_remove(self, _=None):
         if self.active_popup_widget:
             self.active_popup_widget.destroy()
             self.active_popup_widget = None
@@ -1544,10 +1553,11 @@ class Treeview(ttk.Treeview):
             '<Up>': self.popup_destroy,
             '<Down>': self.popup_destroy,
             '<Key>': self.key_press,
+            '<Tab>': self.popup_widget_edit,
             '<Escape>': self.escape,
-            '<Return>': self.popup_edit,
-            '<KP_Enter>': self.popup_edit,
-            '<Button-1>': self.button_single_click,
+            '<Return>': self.popup_widget_edit,
+            '<KP_Enter>': self.popup_widget_edit,
+            '<Button-1>': self.button_click,
             '<Button-4>': self.wheel_mouse,
             '<Button-5>': self.wheel_mouse,
             '<Shift-Up>': self.shift_up,
