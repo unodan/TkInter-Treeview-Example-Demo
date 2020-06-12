@@ -736,9 +736,17 @@ class Treeview(ttk.Treeview):
         dlg.bind('<Return>', rename)
         dlg.bind('<KP_Enter>', rename)
 
-        dlg.button_rename.config(command=rename)
-        dlg.button_skip.config(command=skip)
-        dlg.button_cancel.config(command=cancel)
+        dlg.button_rename.bind('<Button-1>', rename)
+        dlg.button_rename.bind('<Return>', rename)
+        dlg.button_rename.bind('<KP_Enter>', rename)
+
+        dlg.button_skip.bind('<Button-1>', skip)
+        dlg.button_skip.bind('<Return>', skip)
+        dlg.button_skip.bind('<KP_Enter>', skip)
+
+        dlg.button_cancel.bind('<Button-1>', cancel)
+        dlg.button_cancel.bind('<Return>', cancel)
+        dlg.button_cancel.bind('<KP_Enter>', cancel)
 
         if self.active_popup_widget:
             x = self.active_popup_widget.winfo_rootx()
@@ -1393,6 +1401,8 @@ class Treeview(ttk.Treeview):
                         self.item(_item, text=item_text)
                         wdg.destroy()
                         self.active_popup_widget = None
+                        self.focus_set()
+                        self.focus(_item)
                         return
 
                     if not col:
@@ -1414,7 +1424,7 @@ class Treeview(ttk.Treeview):
                                     )
                                     if result == '':
                                         continue
-                                        
+
                                     if result in (_SKIP, _CANCEL):
                                         return
 
@@ -1427,6 +1437,8 @@ class Treeview(ttk.Treeview):
                         self.item(_item, text=wdg_text)
                     else:
                         self.value_set(col-1, wdg.get(), _item)
+                else:
+                    print(2222222222222)
 
                 wdg.destroy()
                 self.active_popup_widget = None
