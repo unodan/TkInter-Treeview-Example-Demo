@@ -76,14 +76,6 @@ class App(tk.Tk):
             else:
                 self.app_data = {
                     'geometry': '500x700',
-                    'treeview': {
-                        'type': 'Treeview',
-                        'settings': (
-                            ('columns', {
-                                'widths': [100, 100, 100]
-                            }),
-                        ),
-                    }
                 }
 
         def setup_treeview():
@@ -130,12 +122,12 @@ class App(tk.Tk):
                     ),
                     'columns': (
                         {'width': 180, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry', 'unique': True},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
-                        {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'mode': tk.READABLE},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 130, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
                             'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
                          },
@@ -159,13 +151,14 @@ class App(tk.Tk):
                              {'text': 'photo5.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
                              {'text': 'photo6.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
                          )},
-                    )
+                    ),
+                    'settings': (),
                 }
 
             tree = self.treeview = Treeview(self.frame, setup=data)
             tree.focus_set()
 
-            settings = dict(self.app_data['treeview']['settings'])
+            settings = dict(data['settings'])
 
             item = settings.get('focus', None)
             if (not item or not tree.exists(item)) and tree.get_children():
@@ -187,11 +180,6 @@ class App(tk.Tk):
 
     def exit(self):
         self.app_data.update({'geometry': self.geometry()})
-        settings = dict(self.app_data['treeview']['settings'])
-        settings['view'] = (self.treeview.xview()[0], self.treeview.yview()[0])
-        settings['focus'] = self.treeview.focus()
-
-        self.app_data['treeview']['settings'] = tuple(settings.items())
 
         self.save()
         self.destroy()
@@ -214,10 +202,13 @@ class App(tk.Tk):
 
             with open(file, 'w') as f:
                 data = self.treeview.serialize()
+                data['settings'] = tuple({
+                    'view': (self.treeview.xview()[0], self.treeview.yview()[0]),
+                    'focus': self.treeview.focus()
+                }.items())
+
                 for idx, c in enumerate(self.treeview.columns):
                     c['width'] = self.treeview.column(f'#{idx}', 'width')
-                    # if 'mode' in c:
-                    #     data['columns'][idx]['mode'] = self.treeview.columns[idx]['mode']
 
                 json.dump(data, f, indent=3)
 
@@ -1133,7 +1124,11 @@ class Treeview(ttk.Treeview):
 
         return 'break'
 
-    def single_click(self, _):
+    def button_release(self, event):
+        self.focus(self.identify('item', event.x, event.y))
+
+    def button_single_click(self, _):
+
         if self.active_popup_widget:
             item = self.focus()
             item_text = self.item(item, 'text')
@@ -1178,23 +1173,25 @@ class Treeview(ttk.Treeview):
             self.active_popup_widget = None
             self.tags_reset()
 
-    def double_click(self, event):
+    def button_double_click(self, event):
+
         region = self.identify_region(event.x, event.y)
 
         if region == 'tree' or region == 'cell':
             row = self.identify_row(event.y)
             column = self.identify_column(event.x)
 
-            if self.active_popup_widget:
-                self.active_popup_widget.destroy()
-
             self.active_popup_widget = self.popup_widget(row, column)
-
             if self.active_popup_widget:
-                self.active_popup_column = column
                 self.active_popup_widget.focus()
-                if isinstance(self.active_popup_widget, Entry):
-                    self.active_popup_widget.select_range(0, tk.END)
+                self.active_popup_widget.focus_set()
+
+                if self.active_popup_widget:
+                    self.active_popup_column = column
+                    self.active_popup_widget.focus_set()
+                    if isinstance(self.active_popup_widget, Entry):
+                        self.active_popup_widget.select_range(0, tk.END)
+
         elif region == 'separator':
             self.expand_column(event)
         elif region == 'heading':
@@ -1202,9 +1199,6 @@ class Treeview(ttk.Treeview):
             self.after(1, self.tags_reset)
 
         return 'break'
-
-    def button_release(self, event):
-        self.focus(self.identify('item', event.x, event.y))
 
     def depth(self, item):
         depth = 1
@@ -1244,7 +1238,7 @@ class Treeview(ttk.Treeview):
             event = Event()
             event.x = bbox[0]
             event.y = bbox[1] + self.rowheight
-            self.double_click(event)
+            self.button_double_click(event)
 
     def insert_leaf(self):
         item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
@@ -1274,7 +1268,7 @@ class Treeview(ttk.Treeview):
             event = Event()
             event.x = bbox[0]
             event.y = bbox[1] + self.rowheight
-            self.double_click(event)
+            self.button_double_click(event)
 
     def populate(self, parent, data=()):
         for item in data:
@@ -1357,12 +1351,16 @@ class Treeview(ttk.Treeview):
             def tab(_):
                 if int(column.lstrip('#')) >= len(self.columns)-1:
                     self.active_popup_widget = self.popup_widget(self.focus(), '#0')
+                    self.active_popup_column = '#0'
                 else:
                     for idx, data in enumerate(self.columns[int(column.lstrip('#'))+1:]):
                         if 'type' in data:
                             self.active_popup_widget = self.popup_widget(self.focus(), f'#{idx+1}')
+                            self.active_popup_column = f'#{idx+1}'
                             self.active_popup_widget.focus_set()
                             self.active_popup_widget.select_range(0, tk.END)
+
+                return 'break'
 
             def enter(_):
                 _item = self.focus()
@@ -1439,7 +1437,7 @@ class Treeview(ttk.Treeview):
                 wdg.icursor(tk.END)
 
                 wdg.bind('<Tab>', tab)
-                wdg.bind('<Shift_Tab>', tab)
+                wdg.bind('<Control-ISO_Left_Tab>', tab)
                 wdg.bind('<Return>', enter)
                 wdg.bind('<KP_Enter>', enter)
                 wdg.bind('<Escape>', destroy)
@@ -1456,6 +1454,8 @@ class Treeview(ttk.Treeview):
                             self.active_popup_widget = self.popup_widget(self.focus(), f'#{idx+1}')
                 self.active_popup_widget.focus_set()
                 self.active_popup_widget.select_range(0, tk.END)
+
+                return 'break'
 
             def enter(_):
                 _text = wdg.get().strip(' ')
@@ -1483,6 +1483,7 @@ class Treeview(ttk.Treeview):
             wdg.icursor(tk.END)
 
             wdg.bind('<Tab>', tab)
+            wdg.bind('<Control-ISO_Left_Tab>', tab)
             wdg.bind('<Return>', enter)
             wdg.bind('<KP_Enter>', enter)
             wdg.bind('<Escape>', destroy)
@@ -1500,7 +1501,7 @@ class Treeview(ttk.Treeview):
         bindings = {
             '<Key>': self.key_press,
             '<Escape>': self.escape,
-            '<Button-1>': self.single_click,
+            '<Button-1>': self.button_single_click,
             '<Button-4>': self.wheel_mouse,
             '<Button-5>': self.wheel_mouse,
             '<Shift-Up>': self.shift_up,
@@ -1512,7 +1513,7 @@ class Treeview(ttk.Treeview):
             '<Control-z>': self.undo,
             '<KeyRelease>': self.key_release,
             '<ButtonPress-3>': self.popup_menu,
-            '<Double-Button-1>': self.double_click,
+            '<Double-Button-1>': self.button_double_click,
             '<ButtonRelease-1>': self.button_release,
             '<<TreeviewOpen>>': self.expand_tree,
             '<<TreeviewClose>>': self.collapse_tree,
