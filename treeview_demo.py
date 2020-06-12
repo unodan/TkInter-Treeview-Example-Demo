@@ -493,6 +493,7 @@ class Treeview(ttk.Treeview):
         self.columns = setup['columns']
         self.headings = setup['headings']
         self.scroll = kwargs.pop('scroll', (True, True))
+
         super().__init__(self.frame, **kwargs)
 
         self.detached = []
@@ -520,14 +521,11 @@ class Treeview(ttk.Treeview):
 
         self.indent = self.style.lookup('Treeview', 'indent')
         self.rowheight = self.style.lookup('Treeview', 'rowheight')
+
         self.bindings_set()
         self.frame.grid(sticky=tk.NSEW)
 
     def setup(self, data):
-        def test(bar):
-            if self.active_popup_widget:
-                self.active_popup_widget.destroy()
-                self.active_popup_widget = None
 
         def set_style():
             background = self.style.lookup("TFrame", "background")
@@ -572,13 +570,13 @@ class Treeview(ttk.Treeview):
             scroll_x, scroll_y = self.scroll
 
             if scroll_x:
-                sb_x = self.scroll_x = Scrollbar(self.frame, callback=test)
+                sb_x = self.scroll_x = Scrollbar(self.frame, callback=popup_widget_destroy)
                 sb_x.configure(command=self.xview, orient=tk.HORIZONTAL)
                 sb_x.grid(sticky=tk.NSEW, row=980, column=0)
                 self.configure(xscrollcommand=sb_x.set)
 
             if scroll_y:
-                sb_y = self.scroll_y = Scrollbar(self.frame, callback=test)
+                sb_y = self.scroll_y = Scrollbar(self.frame, callback=popup_widget_destroy)
                 sb_y.configure(command=self.yview)
                 self.configure(yscrollcommand=sb_y.set)
                 sb_y.grid(sticky=tk.NSEW, row=0, column=990)
@@ -598,6 +596,11 @@ class Treeview(ttk.Treeview):
             for idx, cfg in enumerate(data['columns']):
                 _id = cfg['column'] if 'column' in cfg else f'#{idx}'
                 self.column(_id, width=cfg['width'], minwidth=cfg['minwidth'], stretch=cfg['stretch'])
+
+        def popup_widget_destroy(_):
+            if self.active_popup_widget:
+                self.active_popup_widget.destroy()
+                self.active_popup_widget = None
 
         set_style()
         set_popup_menu()
@@ -1328,6 +1331,9 @@ class Treeview(ttk.Treeview):
         if not bbox:
             return
 
+        if self.active_popup_widget:
+            self.active_popup_widget.destroy()
+
         x, y, width, height = self.bbox(row, column)
         item = self.identify('item', x, y+self.rowheight)
         y += height // 2
@@ -1348,6 +1354,16 @@ class Treeview(ttk.Treeview):
         _type = self.columns[col].get('type', None)
 
         if _type == 'Entry':
+            def tab(_):
+                if int(column.lstrip('#')) >= len(self.columns)-1:
+                    self.active_popup_widget = self.popup_widget(self.focus(), '#0')
+                else:
+                    for idx, data in enumerate(self.columns[int(column.lstrip('#'))+1:]):
+                        if 'type' in data:
+                            self.active_popup_widget = self.popup_widget(self.focus(), f'#{idx+1}')
+                            self.active_popup_widget.focus_set()
+                            self.active_popup_widget.select_range(0, tk.END)
+
             def enter(_):
                 _item = self.focus()
                 wdg_text = wdg.var.get().strip(' ')
@@ -1422,6 +1438,8 @@ class Treeview(ttk.Treeview):
                 wdg.var.set(text)
                 wdg.icursor(tk.END)
 
+                wdg.bind('<Tab>', tab)
+                wdg.bind('<Shift_Tab>', tab)
                 wdg.bind('<Return>', enter)
                 wdg.bind('<KP_Enter>', enter)
                 wdg.bind('<Escape>', destroy)
@@ -1429,6 +1447,16 @@ class Treeview(ttk.Treeview):
                 wdg.bind('<Control-a>', control_a)
 
         elif _type == 'Combobox':
+            def tab(_):
+                if int(column.lstrip('#')) >= len(self.columns)-1:
+                    self.active_popup_widget = self.popup_widget(self.focus(), '#0')
+                else:
+                    for idx, data in enumerate(self.columns[int(column.lstrip('#'))+1:]):
+                        if 'type' in data:
+                            self.active_popup_widget = self.popup_widget(self.focus(), f'#{idx+1}')
+                self.active_popup_widget.focus_set()
+                self.active_popup_widget.select_range(0, tk.END)
+
             def enter(_):
                 _text = wdg.get().strip(' ')
                 if not col:
@@ -1454,6 +1482,7 @@ class Treeview(ttk.Treeview):
             wdg.var.set(text)
             wdg.icursor(tk.END)
 
+            wdg.bind('<Tab>', tab)
             wdg.bind('<Return>', enter)
             wdg.bind('<KP_Enter>', enter)
             wdg.bind('<Escape>', destroy)
