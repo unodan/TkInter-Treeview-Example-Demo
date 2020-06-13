@@ -475,12 +475,14 @@ class Treeview(ttk.Treeview):
             self.dlg_results = \
             self.active_popup_widget = \
             self.active_popup_column = \
-            self.cursor_offset = \
             self.menu_background = None
+
+        self.cursor_offset = 0
 
         self.style = ttk.Style()
         self.indent = self.style.lookup('Treeview', 'indent')
         self.rowheight = self.style.lookup('Treeview', 'rowheight')
+        self.default_font = tkfont.nametofont('TkDefaultFont')
 
         if setup:
             self.setup(setup)
@@ -501,6 +503,13 @@ class Treeview(ttk.Treeview):
             self.troughcolor = self.style.lookup('TScrollbar.trough', 'troughcolor')
             self.menu_background = self.style.lookup('TScrollbar.Heading', 'background')
             self.style.configure(".", indicatorsize=self.rowheight / 2 + 1)
+
+            font = tkfont.nametofont('TkTextFont')
+            font_width = font.measure('W')
+            row_height = font.metrics('linespace')
+            indent = row_height + font_width
+
+            self.style.configure('Treeview', indent=indent)
 
         def set_popup_menu():
             opts = dict(self.style.map('Treeview', 'background'))
@@ -537,16 +546,22 @@ class Treeview(ttk.Treeview):
             scroll_x, scroll_y = self.scroll
 
             if scroll_x:
-                sb_x = self.scroll_x = Scrollbar(self.frame, callback=popup_widget_destroy)
+                sb_x = self.scroll_x = Scrollbar(self.frame, callback=self.popup_widget_destroy)
                 sb_x.configure(command=self.xview, orient=tk.HORIZONTAL)
                 sb_x.grid(sticky=tk.NSEW, row=980, column=0)
                 self.configure(xscrollcommand=sb_x.set)
 
+                sb_x.bind('<Button-4>', self.scrollbars_scroll)
+                sb_x.bind('<Button-5>', self.scrollbars_scroll)
+
             if scroll_y:
-                sb_y = self.scroll_y = Scrollbar(self.frame, callback=popup_widget_destroy)
+                sb_y = self.scroll_y = Scrollbar(self.frame, callback=self.popup_widget_destroy)
                 sb_y.configure(command=self.yview)
                 self.configure(yscrollcommand=sb_y.set)
                 sb_y.grid(sticky=tk.NSEW, row=0, column=990)
+
+                sb_y.bind('<Button-4>', self.scrollbars_scroll)
+                sb_y.bind('<Button-5>', self.scrollbars_scroll)
 
         def set_rows_columns():
             ids = []
@@ -564,16 +579,16 @@ class Treeview(ttk.Treeview):
                 _id = cfg['column'] if 'column' in cfg else f'#{idx}'
                 self.column(_id, width=cfg['width'], minwidth=cfg['minwidth'], stretch=cfg['stretch'])
 
-        def popup_widget_destroy(_):
-            if self.active_popup_widget:
-                self.active_popup_widget.destroy()
-                self.active_popup_widget = None
-
         set_style()
         set_popup_menu()
         set_scrollbars()
         set_rows_columns()
         self.after(1, self.tags_reset)
+
+    def popup_widget_destroy(self, _):
+        if self.active_popup_widget:
+            self.active_popup_widget.destroy()
+            self.active_popup_widget = None
 
     def next(self, item):
         if self.item(item, 'open') and self.get_children(item):
@@ -731,7 +746,7 @@ class Treeview(ttk.Treeview):
             y += root.winfo_rooty()
 
         widest = 0
-        font = tkfont.nametofont('TkDefaultFont')
+        font = self.default_font
         for node in self.get_children(self.focus()):
             size = font.measure(self.item(node, 'text'))
             if size > widest:
@@ -772,7 +787,7 @@ class Treeview(ttk.Treeview):
         item = self.identify('item', x, y-self.winfo_rooty())
 
         widest = 0
-        font = tkfont.nametofont('TkDefaultFont')
+        font = self.default_font
         for node in self.get_children(self.parent(item)):
             size = font.measure(self.item(node, 'text'))
             if size > widest:
@@ -957,7 +972,6 @@ class Treeview(ttk.Treeview):
 
     def shift_down(self, _):
         rowheight = self.style.lookup('Treeview', 'rowheight')
-
         focus = self.focus()
         x, y, _, _ = self.bbox(focus)
         x += self.winfo_rootx()
@@ -1037,8 +1051,6 @@ class Treeview(ttk.Treeview):
         font_width = font.measure('W')
         row_height = font.metrics('linespace')
         indent = row_height + font_width
-
-        self.style.configure('Treeview', indent=indent)
 
         for item in self.get_children():
             text = self.item(item, 'text') if column == '#0' else self.item(item, 'values')[0]
@@ -1188,6 +1200,27 @@ class Treeview(ttk.Treeview):
 
         return 'break'
 
+    def scrollbars_scroll(self, event):
+        wdg = event.widget
+
+        if not isinstance(wdg, Scrollbar):
+            return
+
+        if str(wdg.cget('orient')) == 'horizontal' and self.scroll_x:
+            units = self.default_font.measure('W')
+            if event.num == 4:
+                self.xview_scroll(units, tk.UNITS)
+            elif event.num == 5:
+                self.xview_scroll(-units, tk.UNITS)
+
+        elif self.scroll_y:
+            if event.num == 4:
+                self.yview_scroll(1, tk.UNITS)
+            elif event.num == 5:
+                self.yview_scroll(-1, tk.UNITS)
+
+        return 'break'
+
     def item_depth(self, item):
         depth = 1
         parent = self.parent(item)
@@ -1220,8 +1253,9 @@ class Treeview(ttk.Treeview):
         self.focus(iid)
         self.value_set(_IID, iid, iid)
         self.tags_reset()
+
+        bbox = self.bbox(iid, '#0')
         self.active_popup_widget = self.popup_widget(iid, '#0')
-        self.active_popup_column = '#0'
 
     def insert_leaf(self):
         item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
@@ -1246,7 +1280,6 @@ class Treeview(ttk.Treeview):
         self.value_set(_IID, iid, iid)
         self.tags_reset()
         self.active_popup_widget = self.popup_widget(iid, '#0')
-        self.active_popup_column = '#0'
 
     def populate(self, parent, data=()):
         for item in data:
@@ -1428,8 +1461,12 @@ class Treeview(ttk.Treeview):
                     wdg.destroy()
                     self.active_popup_widget = None
                     self.focus_set()
-                    prev = self.prev(self.focus())
-                    if prev:
+                    prev = self.prev(_item)
+
+                    if prev and event.state & 1:
+                        self.selection_add(prev)
+                        self.focus(prev)
+                    else:
                         self.selection_set(prev)
                         self.focus(prev)
 
@@ -1440,8 +1477,12 @@ class Treeview(ttk.Treeview):
                     wdg.destroy()
                     self.active_popup_widget = None
                     self.focus_set()
-                    _next = self.next(self.focus())
-                    if _next:
+                    _next = self.next(_item)
+
+                    if _next and event.state & 1:
+                        self.selection_add(_next)
+                        self.focus(_next)
+                    else:
                         self.selection_set(_next)
                         self.focus(_next)
 
@@ -1455,7 +1496,9 @@ class Treeview(ttk.Treeview):
 
                 bindings = {
                     '<Up>': move_focus,
+                    '<Shift-Up>': move_focus,
                     '<Down>': move_focus,
+                    '<Shift-Down>': move_focus,
                     '<Tab>': tab,
                     # '<Control-ISO_Left_Tab>': tab,
                     '<Return>': update,
