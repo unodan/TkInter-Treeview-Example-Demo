@@ -1220,13 +1220,8 @@ class Treeview(ttk.Treeview):
         self.focus(iid)
         self.value_set(_IID, iid, iid)
         self.tags_reset()
-
-        bbox = self.bbox(iid, '#0')
-        if bbox:
-            event = Event()
-            event.x = bbox[0]
-            event.y = bbox[1] + self.rowheight
-            self.button_double_click(event)
+        self.active_popup_widget = self.popup_widget(iid, '#0')
+        self.active_popup_column = '#0'
 
     def insert_leaf(self):
         item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
@@ -1250,14 +1245,8 @@ class Treeview(ttk.Treeview):
         self.focus(iid)
         self.value_set(_IID, iid, iid)
         self.tags_reset()
-
-        bbox = self.bbox(iid, '#0')
-        if bbox:
-            event = Event()
-            event.x = bbox[0]
-            event.y = bbox[1] + self.rowheight
-
-            wdg = self.active_popup_widget = self.popup_widget(iid, '#0')
+        self.active_popup_widget = self.popup_widget(iid, '#0')
+        self.active_popup_column = '#0'
 
     def populate(self, parent, data=()):
         for item in data:
@@ -1458,7 +1447,6 @@ class Treeview(ttk.Treeview):
 
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
-                print(x_pos, y_pos)
                 wdg.place(x=x_pos+4, y=y_pos, anchor='w', width=width-4)
                 wdg.var.set(text)
                 wdg.icursor(tk.END)
