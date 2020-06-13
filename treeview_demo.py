@@ -113,21 +113,21 @@ class App(tk.Tk):
                     'data': (
                         {'text': 'Folder 0', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
                          'children': (
-                             {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
-                             {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
-                             {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                             {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                             {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                             {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
                              {'text': 'Folder 0_1', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
                               'children': (
-                                  {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
-                                  {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
-                                  {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                                  {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                                  {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                                  {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
                               )},
                          )},
                         {'text': 'Folder 1', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
                          'children': (
-                             {'text': 'photo4.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
-                             {'text': 'photo5.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
-                             {'text': 'photo6.png', 'values': ('', 'Leaf', '', '', '', dt_string, '')},
+                             {'text': 'photo4.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                             {'text': 'photo5.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                             {'text': 'photo6.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
                          )},
                     ),
                 }
@@ -1244,7 +1244,7 @@ class Treeview(ttk.Treeview):
         iid = self.insert(
             parent,
             idx,
-            **{'text': '', 'values': (['', 'Leaf', '', '', '', datetime.now().strftime("%Y/%m/%d %H-%M-%S"), ''])},
+            **{'text': '', 'values': (['', 'Leaf', '', '', '0 Kb', datetime.now().strftime("%Y/%m/%d %H-%M-%S"), ''])},
         )
 
         self.focus(iid)
