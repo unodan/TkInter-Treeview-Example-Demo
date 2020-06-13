@@ -21,33 +21,6 @@ _SKIP = 0
 _CANCEL = 1
 
 
-def dump(data, indent=None):
-    if not isinstance(data, dict):
-        print('Value:', data)
-        return
-
-    indent = indent if indent else '.'
-
-    print('-------------------------------------------------------------------------------------------------------')
-    if data:
-        def walk(_data, count):
-            count += 1
-            for key, value in _data.items():
-                if isinstance(value, dict):
-                    print(indent * count, key)
-                    walk(value, count)
-                else:
-                    if isinstance(value, str):
-                        value = f'"{value}"'
-                    print(indent * count, key, f'value={value}')
-
-        walk(data, 0)
-    else:
-        print(' (No Data)')
-
-    print('-------------------------------------------------------------------------------------------------------')
-
-
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -506,15 +479,14 @@ class Treeview(ttk.Treeview):
             self.menu_background = None
 
         self.style = ttk.Style()
+        self.indent = self.style.lookup('Treeview', 'indent')
+        self.rowheight = self.style.lookup('Treeview', 'rowheight')
 
         if setup:
             self.setup(setup)
 
         if data:
             self.populate('', data)
-
-        self.indent = self.style.lookup('Treeview', 'indent')
-        self.rowheight = self.style.lookup('Treeview', 'rowheight')
 
         self.bindings_set()
         self.frame.grid(sticky=tk.NSEW)
@@ -528,6 +500,7 @@ class Treeview(ttk.Treeview):
             self.tag_configure('even', background='#ffffff')
             self.troughcolor = self.style.lookup('TScrollbar.trough', 'troughcolor')
             self.menu_background = self.style.lookup('TScrollbar.Heading', 'background')
+            self.style.configure(".", indicatorsize=self.rowheight / 2 + 1)
 
         def set_popup_menu():
             opts = dict(self.style.map('Treeview', 'background'))
@@ -1065,7 +1038,6 @@ class Treeview(ttk.Treeview):
         row_height = font.metrics('linespace')
         indent = row_height + font_width
 
-        self.style.configure(".", indicatorsize=row_height)
         self.style.configure('Treeview', indent=indent)
 
         for item in self.get_children():
@@ -1196,23 +1168,17 @@ class Treeview(ttk.Treeview):
         self.focus(self.identify('item', event.x, event.y))
 
     def button_double_click(self, event):
-
         region = self.identify_region(event.x, event.y)
 
         if region == 'tree' or region == 'cell':
             row = self.identify_row(event.y)
             column = self.identify_column(event.x)
 
-            self.active_popup_widget = self.popup_widget(row, column)
-            if self.active_popup_widget:
-                self.active_popup_widget.focus()
-                self.active_popup_widget.focus_set()
-
-                if self.active_popup_widget:
-                    self.active_popup_column = column
-                    self.active_popup_widget.focus_set()
-                    if isinstance(self.active_popup_widget, Entry):
-                        self.active_popup_widget.select_range(0, tk.END)
+            wdg = self.active_popup_widget = self.popup_widget(row, column)
+            if wdg:
+                self.active_popup_column = column
+                if isinstance(wdg, Entry):
+                    wdg.select_range(0, tk.END)
 
         elif region == 'separator':
             self.column_expand(event)
@@ -1290,7 +1256,8 @@ class Treeview(ttk.Treeview):
             event = Event()
             event.x = bbox[0]
             event.y = bbox[1] + self.rowheight
-            self.button_double_click(event)
+
+            wdg = self.active_popup_widget = self.popup_widget(iid, '#0')
 
     def populate(self, parent, data=()):
         for item in data:
@@ -1343,6 +1310,7 @@ class Treeview(ttk.Treeview):
     def popup_widget(self, row, column):
         if not row or not column:
             return
+
         bbox = self.bbox(row, column)
         if not bbox:
             return
@@ -1350,19 +1318,19 @@ class Treeview(ttk.Treeview):
         if self.active_popup_widget:
             self.active_popup_widget.destroy()
 
-        x, y, width, height = self.bbox(row, column)
-        item = self.identify('item', x, y+self.rowheight)
-        y += height // 2
+        x_pos, y_pos, width, height = self.bbox(row, column)
+        item = self.identify('item', x_pos, y_pos+self.rowheight)
+        y_pos += height // 2
 
         if column == '#0':
             col = 0
             text = self.item(item, 'text')
-            x += self.indent / 2
-            width -= self.indent / 2 + 1
+            x_pos += self.indent // 2
+            width -= self.indent // 2 + 1
         else:
             col = int(column.lstrip('#'))
             text = self.value_get(col-1, item)
-            x += 1
+            x_pos += 1
 
         wdg = None
         mode = self.columns[col].get('mode', tk.WRITABLE)
@@ -1437,8 +1405,6 @@ class Treeview(ttk.Treeview):
                         self.item(_item, text=wdg_text)
                     else:
                         self.value_set(col-1, wdg.get(), _item)
-                else:
-                    print(2222222222222)
 
                 wdg.destroy()
                 self.active_popup_widget = None
@@ -1492,9 +1458,12 @@ class Treeview(ttk.Treeview):
 
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
-                wdg.place(x=x+4, y=y, anchor='w', width=width-4)
+                print(x_pos, y_pos)
+                wdg.place(x=x_pos+4, y=y_pos, anchor='w', width=width-4)
                 wdg.var.set(text)
                 wdg.icursor(tk.END)
+                wdg.focus()
+                wdg.focus_set()
 
                 bindings = {
                     '<Up>': move_focus,
@@ -1546,7 +1515,7 @@ class Treeview(ttk.Treeview):
             state = '' if mode == tk.WRITABLE else 'readonly'
             values = self.columns[col].get('values', '')
             wdg = Combobox(self, state=state, values=values)
-            wdg.place(x=x, y=y, anchor='w', width=width-2)
+            wdg.place(x=x_pos, y=y_pos, anchor='w', width=width-2)
             wdg.var.set(text)
             wdg.icursor(tk.END)
 
