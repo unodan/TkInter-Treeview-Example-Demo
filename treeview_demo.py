@@ -219,19 +219,19 @@ class RenameDialog(DialogBase):
     def __init__(self, parent, **kwargs):
         message = kwargs.pop('message', 'No Message!')
         super().__init__(parent, **kwargs)
-        self.container.rowconfigure(1, weight=1)
+        self.container.rowconfigure(0, weight=1)
         self.container.columnconfigure(0, weight=1)
 
         frame = self.row0 = ttk.Frame(self.container)
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
         self.label = ttk.Label(frame, text=message)
-        self.label.grid(sticky=tk.N+tk.EW, pady=(0, 10), row=0, column=0)
+        self.label.grid(sticky=tk.EW, pady=(0, 10), row=0, column=0)
 
-        self.entry = Entry(frame, width=30)
+        self.entry = Entry(frame)
         self.entry.config(textvariable=self.entry.var)
         self.entry.grid(sticky=tk.NSEW, row=1, column=0, padx=(5, 0))
-        frame.grid(row=0, sticky=tk.EW, padx=10, pady=(20, 0))
+        frame.grid(row=0, sticky=tk.NSEW, padx=10, pady=(20, 0))
 
         frame = self.row1 = ttk.Frame(self.container)
         frame.rowconfigure(0, weight=1)
@@ -695,7 +695,7 @@ class Treeview(ttk.Treeview):
         dlg = RenameDialog(root, width=320, height=150, title=title, message=message)
         dlg.update_idletasks()
 
-        dlg.label.config(wraplength=dlg.container.winfo_width())
+        dlg.label.config(wraplength=dlg.winfo_width())
 
         dlg.entry.var.set(current_name)
         dlg.entry.select_range(0, tk.END)
@@ -890,8 +890,7 @@ class Treeview(ttk.Treeview):
                     while text == self.item(node, 'text'):
                         result = self.dlg_rename(
                             'Rename',
-                            f'The name "{text}" already exists, please choose another '
-                            f'name and try again.',
+                            f'The name "{text}" already exists, please choose another name and try again.',
                             text,
                         )
                         if result in (SKIP, CANCEL):
