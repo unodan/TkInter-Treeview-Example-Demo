@@ -875,7 +875,6 @@ class Treeview(ttk.Treeview):
                 word = 'item' if value == 1 else 'items'
                 self.value_set(self.field.size, f'{value} {word}', parent)
 
-        print(items)
         super(Treeview, self).delete(*items)
 
     def insert(self, parent, index=tk.END, **kwargs):
@@ -898,7 +897,6 @@ class Treeview(ttk.Treeview):
                             text,
                         )
                         if result in (SKIP, CANCEL):
-                            print(233333333333)
                             return result
 
                         text = result
@@ -1087,7 +1085,7 @@ class Treeview(ttk.Treeview):
                             text,
                         )
                         if result in (SKIP, CANCEL):
-                            return
+                            return result
 
                         text = result
                         self.item(item, text=text)
@@ -1106,6 +1104,17 @@ class Treeview(ttk.Treeview):
         return 'break'
 
     def button_click(self, _):
+        if isinstance(self.focus_get(), Entry):
+            if not self.focus_get().var.get().strip(' '):
+                self.focus_get().destroy()
+                self.delete(self.focus())
+                self.tags_reset()
+                return
+            else:
+                self.item(self.focus(), text=self.focus_get().var.get())
+                self.focus_get().destroy()
+                return
+
         if self.active_popup_widget:
             item = self.focus()
             item_text = self.item(item, 'text')
@@ -1204,6 +1213,35 @@ class Treeview(ttk.Treeview):
 
         return depth
 
+    def insert_leaf(self):
+        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
+
+        if not item:
+            parent = ''
+            idx = tk.END
+        elif self.value_get(self.field.item, item) == 'Node':
+            idx = 0
+            parent = item
+        else:
+            idx = self.index(item) + 1
+            parent = self.parent(item)
+
+        iid = self.insert(
+            parent,
+            idx,
+            text='',
+            values=('', 'Leaf', '', '', '0 Kb', datetime.now().strftime("%Y/%m/%d %H-%M-%S"), ''),
+        )
+
+        self.focus(iid)
+        self.tags_reset()
+        self.value_set(self.field.iid, iid, iid)
+        self.popup_widget(iid, '#0')
+
+        # wdg.focus()
+        # wdg.focus_set()
+        # wdg.select_range(0, tk.END)
+
     def insert_node(self):
         item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
 
@@ -1228,34 +1266,7 @@ class Treeview(ttk.Treeview):
         self.focus(iid)
         self.value_set(self.field.iid, iid, iid)
         self.tags_reset()
-        self.active_popup_widget = self.popup_widget(iid, '#0')
-        self.active_popup_column = '#0'
-
-    def insert_leaf(self):
-        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
-
-        if not item:
-            parent = ''
-            idx = tk.END
-        elif self.value_get(self.field.item, item) == 'Node':
-            idx = 0
-            parent = item
-        else:
-            idx = self.index(item) + 1
-            parent = self.parent(item)
-
-        iid = self.insert(
-            parent,
-            idx,
-            text='',
-            values=('', 'Leaf', '', '', '0 Kb', datetime.now().strftime("%Y/%m/%d %H-%M-%S"), ''),
-        )
-
-        self.focus(iid)
-        self.value_set(self.field.iid, iid, iid)
-        self.tags_reset()
-        self.active_popup_widget = self.popup_widget(iid, '#0')
-        self.active_popup_column = '#0'
+        self.popup_widget(iid, '#0')
 
     def populate(self, parent, data=()):
         for item in data:
@@ -1315,6 +1326,7 @@ class Treeview(ttk.Treeview):
 
         if self.active_popup_widget:
             self.active_popup_widget.destroy()
+            self.active_popup_widget = None
 
         x_pos, y_pos, width, height = self.bbox(row, column)
         item = self.identify('item', x_pos, y_pos+self.rowheight)
@@ -1356,10 +1368,11 @@ class Treeview(ttk.Treeview):
                             self.active_popup_column = f'#{index+1}'
                             break
 
-                self.active_popup_widget = self.popup_widget(self.focus(), self.active_popup_column)
-                self.active_popup_widget.focus()
-                self.active_popup_widget.focus_set()
-                self.active_popup_widget.select_range(0, tk.END)
+                self.active_popup_widget = _wdg = self.popup_widget(self.focus(), self.active_popup_column)
+
+                _wdg.focus()
+                _wdg.focus_set()
+                _wdg.select_range(0, tk.END)
 
                 return 'break'
 
@@ -1404,7 +1417,7 @@ class Treeview(ttk.Treeview):
                                         continue
 
                                     if result in (SKIP, CANCEL):
-                                        return
+                                        return result
 
                                     wdg_text = result
                                     self.item(item, text=text)
@@ -1414,7 +1427,6 @@ class Treeview(ttk.Treeview):
 
                         self.item(_item, text=wdg_text)
                     else:
-                        print(55555, idx-1, wdg.get(), _item)
                         self.value_set(idx-1, wdg.get(), _item)
 
                 wdg.destroy()
@@ -1477,11 +1489,12 @@ class Treeview(ttk.Treeview):
 
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
-                wdg.place(x=x_pos+4, y=y_pos, anchor='w', width=width-4)
                 wdg.var.set(text)
-                wdg.icursor(tk.END)
+                # wdg.icursor(tk.END)
                 wdg.focus()
                 wdg.focus_set()
+                wdg.select_range(0, tk.END)
+                wdg.place(x=x_pos+4, y=y_pos, anchor='w', width=width-4)
 
                 for command, callback in (
                         ('<Up>', move_focus),
