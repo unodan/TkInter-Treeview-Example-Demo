@@ -11,8 +11,8 @@ from datetime import datetime
 
 _path = Path(__file__).cwd()
 
-SKIP = 0
-CANCEL = 1
+SKIP = -1
+CANCEL = -2
 SHIFT_KEY = 1
 
 LAST_ROW = 990
@@ -854,7 +854,11 @@ class Treeview(ttk.Treeview):
                     self.value_set(self.field.last_modified, datetime.now().strftime("%Y/%m/%d %H:%M:%S"), item)
 
                     iid = self.insert(dst, **self.item(item))
-                    if iid:
+                    if iid == SKIP:
+                        continue
+                    elif iid == CANCEL:
+                        break
+                    elif iid:
                         self.value_set(self.field.iid, iid, iid)
                         self.tag_remove('selected', iid)
                         selected[item] = iid
@@ -894,7 +898,8 @@ class Treeview(ttk.Treeview):
                             text,
                         )
                         if result in (SKIP, CANCEL):
-                            return
+                            print(233333333333)
+                            return result
 
                         text = result
 
