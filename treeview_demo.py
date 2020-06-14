@@ -3,18 +3,22 @@ import tkinter as tk
 import tkinter.ttk as ttk
 import tkinter.font as tkfont
 
+from os import path, makedirs
 from sys import platform
-from enum import IntEnum
-from pathlib import Path
 from datetime import datetime
 
+ABS_PATH = path.dirname(path.realpath(__file__))
 
-_path = Path(__file__).cwd()
+_IID = 0
+_TYPE = 1
+_OPEN = 2
+_TAGS = 3
+_SIZE = 4
+_MODIFIED = 5
+_DATA1 = 6
 
-SKIP = 0
-CANCEL = 1
-WHEEL_MOUSE_UP = 4
-WHEEL_MOUSE_DOWN = 5
+_SKIP = 0
+_CANCEL = 1
 
 
 class App(tk.Tk):
@@ -35,16 +39,17 @@ class App(tk.Tk):
         self.title('Treeview Demo')
         self.protocol('WM_DELETE_WINDOW', self.exit)
 
-        if 'linux' in platform:
+        self.platform = platform
+        if platform == "linux" or platform == "linux2":
             self.platform = 'linux'
 
         self.setup()
 
     def setup(self):
         def setup_app():
-            file = _path.joinpath('app.json')
-            if file.exists():
-                with open(str(file)) as f:
+            file = path.join(ABS_PATH, 'app.json')
+            if path.exists(file):
+                with open(file) as f:
                     self.app_data = json.load(f)
             else:
                 self.app_data = {
@@ -75,9 +80,9 @@ class App(tk.Tk):
             self.option_add("*TCombobox*Listbox*Background", 'white')
             self.option_add("*TCombobox*Listbox*Foreground", '#000000')
 
-            file = _path.joinpath('treeview.json')
-            if file.exists():
-                with open(str(file)) as f:
+            file = path.join(ABS_PATH, 'treeview.json')
+            if path.exists(file):
+                with open(file) as f:
                     setup = json.load(f)
             else:
                 now = datetime.now()
@@ -131,7 +136,7 @@ class App(tk.Tk):
             tree.focus_set()
 
             settings = dict(setup.get('settings', ()))
-            item = settings.get('focus')
+            item = settings.get('focus', None)
             if (not item or not tree.exists(item)) and tree.get_children():
                 item = tree.get_children()[0]
 
@@ -156,22 +161,32 @@ class App(tk.Tk):
         self.destroy()
 
     def save(self):
-        file = _path.joinpath('app.json')
-        with open(str(file), 'w') as f:
-            json.dump(self.app_data, f, indent=3)
+        file = path.join(ABS_PATH, 'app.json')
+        if file:
+            dirname = path.dirname(file)
+            if not path.exists(dirname):
+                makedirs(dirname)
 
-        file = _path.joinpath('treeview.json')
-        with open(str(file), 'w') as f:
-            data = self.treeview.serialize()
-            data['settings'] = tuple({
-                'view': (self.treeview.xview()[0], self.treeview.yview()[0]),
-                'focus': self.treeview.focus()
-            }.items())
+            with open(file, 'w') as f:
+                json.dump(self.app_data, f, indent=3)
 
-            for idx, c in enumerate(self.treeview.columns):
-                c['width'] = self.treeview.column(f'#{idx}', 'width')
+        file = path.join(ABS_PATH, 'treeview.json')
+        if file:
+            dirname = path.dirname(file)
+            if not path.exists(dirname):
+                makedirs(dirname)
 
-            json.dump(data, f, indent=3)
+            with open(file, 'w') as f:
+                data = self.treeview.serialize()
+                data['settings'] = tuple({
+                    'view': (self.treeview.xview()[0], self.treeview.yview()[0]),
+                    'focus': self.treeview.focus()
+                }.items())
+
+                for idx, c in enumerate(self.treeview.columns):
+                    c['width'] = self.treeview.column(f'#{idx}', 'width')
+
+                json.dump(data, f, indent=3)
 
 
 class Event:
@@ -281,8 +296,8 @@ class Entry(ttk.Entry):
         self.configure(textvariable=self.var)
 
         self.undo_data = {}
-        self.popup = None
-        self.menu_background = None
+        self.popup = \
+            self.menu_background = None
         self.style = ttk.Style()
 
         self.setup()
@@ -329,7 +344,11 @@ class Entry(ttk.Entry):
         self.popup.tk_popup(event.x_root, event.y_root)
 
     def bindings_set(self):
-        self.bind('<ButtonPress-3>', self.popup_menu)
+        bindings = {
+            '<ButtonPress-3>': self.popup_menu,
+        }
+        for command, callback in bindings.items():
+            self.bind(command, callback)
 
 
 class Combobox(ttk.Combobox):
@@ -338,8 +357,8 @@ class Combobox(ttk.Combobox):
         self.var = tk.StringVar()
         self.configure(textvariable=self.var)
 
-        self.popup = None
-        self.menu_background = None
+        self.popup = \
+            self.menu_background = None
 
         self.style = ttk.Style()
 
@@ -387,7 +406,11 @@ class Combobox(ttk.Combobox):
         self.popup.tk_popup(event.x_root, event.y_root)
 
     def bindings_set(self):
-        self.bind('<ButtonPress-3>', self.popup_menu)
+        bindings = {
+            '<ButtonPress-3>': self.popup_menu,
+        }
+        for command, callback in bindings.items():
+            self.bind(command, callback)
 
 
 class Label(ttk.Label):
@@ -446,7 +469,6 @@ class Treeview(ttk.Treeview):
 
         self.shift = \
             self.popup = \
-            self.field = \
             self.scroll_x = \
             self.scroll_y = \
             self.selected = \
@@ -543,19 +565,19 @@ class Treeview(ttk.Treeview):
 
         def set_rows_columns():
             ids = []
-            columns = ''
-            for idx, column in enumerate(data['headings'][1:], 1):
-                ids.append(f'#{idx}')
-                columns += ' '.join(column['text'].lower().split()).replace(' ', '_') + ' '
-            self.field = IntEnum('Columns', columns, start=0)
+            columns = len(data['columns'])
+            for column in range(1, columns):
+                ids.append(f'#{column}')
             self["columns"] = ids
 
             for idx, cfg in enumerate(data['headings']):
-                self.heading(f'#{idx}', text=cfg['text'], anchor=cfg['anchor'])
+                _id = cfg['column'] if 'column' in cfg else f'#{idx}'
+                self.heading(_id, text=cfg['text'], anchor=cfg['anchor'])
                 self.sorted_columns[f'#{idx}'] = True
 
             for idx, cfg in enumerate(data['columns']):
-                self.column(f'#{idx}', width=cfg['width'], minwidth=cfg['minwidth'], stretch=cfg['stretch'])
+                _id = cfg['column'] if 'column' in cfg else f'#{idx}'
+                self.column(_id, width=cfg['width'], minwidth=cfg['minwidth'], stretch=cfg['stretch'])
 
         set_style()
         set_popup_menu()
@@ -606,7 +628,7 @@ class Treeview(ttk.Treeview):
         def set_tag(_item, _tag):
             _tag = 'even' if _tag == 'odd' else 'odd'
             self.tag_add(_tag, _item)
-            self.value_set(self.field.tags, str(self.item(_item, 'tags')), _item)
+            self.value_set(_TAGS, str(self.item(_item, 'tags')), _item)
             if int(self.item(_item, 'open')):
                 for node in self.get_children(_item):
                     _tag = set_tag(node, _tag)
@@ -625,7 +647,7 @@ class Treeview(ttk.Treeview):
         for item in self.get_children():
             reset(item)
             tag = set_tag(item, tag)
-            self.value_set(self.field.tags, str(self.item(item, 'tags')), item)
+            self.value_set(_TAGS, str(self.item(item, 'tags')), item)
 
     def tag_replace(self, old, new, item=None):
         for item in (item,) if item else self.tag_has(old):
@@ -663,7 +685,6 @@ class Treeview(ttk.Treeview):
             self.item(item, tags=_tags)
 
     def value_get(self, idx, item):
-        idx = int(idx)
         if not item:
             return ''
         values = list(self.item(item, 'values'))
@@ -671,7 +692,6 @@ class Treeview(ttk.Treeview):
             return values[idx]
 
     def value_set(self, idx, value, item):
-        idx = int(idx)
         values = list(self.item(item, 'values'))
         if idx < len(values):
             values[idx] = value
@@ -680,11 +700,11 @@ class Treeview(ttk.Treeview):
     def dlg_rename(self, title, message, current_name):
 
         def skip(_=None):
-            self.dlg_results = SKIP
+            self.dlg_results = _SKIP
             dlg.destroy()
 
         def cancel(_=None):
-            self.dlg_results = CANCEL
+            self.dlg_results = _CANCEL
             dlg.destroy()
 
         def rename(_=None):
@@ -814,7 +834,7 @@ class Treeview(ttk.Treeview):
         def set_selected(_item):
             self.selected.append(_item)
             self.tag_add('selected', _item)
-            self.value_set(self.field.tags, str(self.item(_item, 'tags')), _item)
+            self.value_set(_TAGS, str(self.item(_item, 'tags')), _item)
             if not self.item(_item, 'open'):
                 for node in self.get_children(_item):
                     set_selected(node)
@@ -822,7 +842,7 @@ class Treeview(ttk.Treeview):
         if not self.shift:
             for item in self.tag_has('selected'):
                 self.tag_remove('selected', item)
-                self.value_set(self.field.tags, str(self.item(item, 'tags')), item)
+                self.value_set(_TAGS, str(self.item(item, 'tags')), item)
 
         self.selected = []
         for item in self.selection():
@@ -841,7 +861,7 @@ class Treeview(ttk.Treeview):
             selections = self.tag_has('selected')
 
         for dst_item in self.selection():
-            if not len(selections) or self.value_get(self.field.item, dst_item) != 'Node':
+            if not len(selections) or self.value_get(_TYPE, dst_item) != 'Node':
                 continue
 
             if self.detached:
@@ -853,11 +873,11 @@ class Treeview(ttk.Treeview):
                 for item in selections:
                     parent = self.parent(item)
                     dst = selected[parent] if parent in selected else dst_item
-                    self.value_set(self.field.last_modified, datetime.now().strftime("%Y/%m/%d %H:%M:%S"), item)
+                    self.value_set(_MODIFIED, datetime.now().strftime("%Y/%m/%d %H:%M:%S"), item)
 
                     iid = self.insert(dst, **self.item(item))
                     if iid:
-                        self.value_set(self.field.iid, iid, iid)
+                        self.value_set(_IID, iid, iid)
                         self.tag_remove('selected', iid)
                         selected[item] = iid
 
@@ -869,9 +889,9 @@ class Treeview(ttk.Treeview):
         for item in items:
             parent = self.parent(item)
             if parent:
-                value = int(self.value_get(self.field.size, parent).split(' ')[0]) - 1
+                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
                 word = 'item' if value == 1 else 'items'
-                self.value_set(self.field.size, f'{value} {word}', parent)
+                self.value_set(_SIZE, f'{value} {word}', parent)
 
         super(Treeview, self).delete(*items)
 
@@ -902,7 +922,7 @@ class Treeview(ttk.Treeview):
                             f'name and try again.',
                             text,
                         )
-                        if result in (SKIP, CANCEL):
+                        if result in (_SKIP, _CANCEL):
                             return
 
                         text = result
@@ -913,7 +933,7 @@ class Treeview(ttk.Treeview):
         child_count = len(self.get_children(parent))
         if child_count:
             word = 'item' if child_count == 1 else 'items'
-            self.value_set(self.field.size, f'{len(self.get_children(parent))} {word}', parent)
+            self.value_set(_SIZE, f'{len(self.get_children(parent))} {word}', parent)
         self.see(iid)
         return iid
 
@@ -981,14 +1001,14 @@ class Treeview(ttk.Treeview):
     def expand_tree(self, _):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_set(self.field.open, True, item)
+            self.value_set(_OPEN, True, item)
             self.tags_reset(excluded='selected')
         self.after(1, func)
 
     def collapse_tree(self, _=None):
         def func():
             item = self.identify('item', self.winfo_pointerx(), self.winfo_pointery()-self.winfo_rooty())
-            self.value_set(self.field.open, False, item)
+            self.value_set(_OPEN, False, item)
             self.tags_reset(excluded='selected')
         self.after(1, func)
 
@@ -1005,8 +1025,7 @@ class Treeview(ttk.Treeview):
                 else:
                     continue
 
-                _length = font.measure(_text) + (indent * self.item_depth(child)) if column == '#0' \
-                    else font.measure(_text)
+                _length = font.measure(_text) + (indent * self.item_depth(child)) if column == '#0' else font.measure(_text)
 
                 if _length > _largest:
                     _largest = _length
@@ -1058,9 +1077,9 @@ class Treeview(ttk.Treeview):
 
             parent = self.parent(item)
             if parent:
-                value = int(self.value_get(self.field.size, parent).split(' ')[0]) - 1
+                value = int(self.value_get(_SIZE, parent).split(' ')[0])-1
                 word = 'item' if value == 1 else 'items'
-                self.value_set(self.field.size, f'{value} {word}', parent)
+                self.value_set(_SIZE, f'{value} {word}', parent)
 
         item = self.focus()
         item = self.prev(item)
@@ -1073,27 +1092,30 @@ class Treeview(ttk.Treeview):
 
     def reattach(self, item, parent, index):
         for idx, column in enumerate(self.columns):
-            if 'unique' in column and column['unique'] and not idx:
-                text = self.item(item, 'text')
-                children = self.get_children(parent)
+            if 'unique' in column and column['unique']:
+                if idx:
+                    pass
+                else:
+                    text = self.item(item, 'text')
+                    children = self.get_children(parent)
 
-                column_values = []
-                for node in children:
-                    column_values.append(self.item(node, 'text'))
+                    column_values = []
+                    for node in children:
+                        column_values.append(self.item(node, 'text'))
 
-                for node in children:
-                    while text == self.item(node, 'text'):
-                        result = self.dlg_rename(
-                            'Rename',
-                            f'The name "{text}" already exists, please choose another '
-                            f'name and try again.',
-                            text,
-                        )
-                        if result in (SKIP, CANCEL):
-                            return
+                    for node in children:
+                        while text == self.item(node, 'text'):
+                            result = self.dlg_rename(
+                                'Rename',
+                                f'The name "{text}" already exists, please choose another '
+                                f'name and try again.',
+                                text,
+                            )
+                            if result in (_SKIP, _CANCEL):
+                                return
 
-                        text = result
-                        self.item(item, text=text)
+                            text = result
+                            self.item(item, text=text)
 
         iid = self.move(item, parent, index)
 
@@ -1103,7 +1125,7 @@ class Treeview(ttk.Treeview):
         if not self.item(self.focus(), 'text'):
             self.delete(self.focus())
 
-        value = -0.1/3 if event.num == WHEEL_MOUSE_DOWN else 0.1 / 3
+        value = -0.1/3 if event.num == 5 else 0.1/3
         self.yview('moveto', self.yview()[0] + value)
 
         return 'break'
@@ -1184,16 +1206,17 @@ class Treeview(ttk.Treeview):
         if not isinstance(wdg, Scrollbar):
             return
 
-        if self.scroll_x and str(wdg.cget('orient')) == tk.HORIZONTAL:
+        if str(wdg.cget('orient')) == 'horizontal' and self.scroll_x:
             units = self.default_font.measure('W')
-            if event.num == WHEEL_MOUSE_UP:
+            if event.num == 4:
                 self.xview_scroll(units, tk.UNITS)
-            elif event.num == WHEEL_MOUSE_DOWN:
+            elif event.num == 5:
                 self.xview_scroll(-units, tk.UNITS)
+
         elif self.scroll_y:
-            if event.num == WHEEL_MOUSE_UP:
+            if event.num == 4:
                 self.yview_scroll(1, tk.UNITS)
-            elif event.num == WHEEL_MOUSE_DOWN:
+            elif event.num == 5:
                 self.yview_scroll(-1, tk.UNITS)
 
         return 'break'
@@ -1213,7 +1236,7 @@ class Treeview(ttk.Treeview):
         if not item:
             parent = ''
             idx = tk.END
-        elif self.value_get(self.field.item, item) == 'Node':
+        elif self.value_get(_TYPE, item) == 'Node':
             idx = 0
             parent = item
         else:
@@ -1224,14 +1247,14 @@ class Treeview(ttk.Treeview):
             parent,
             idx,
             open=True,
-            text='',
-            values=('', 'Node', True, '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''),
+            **{'text': '', 'values': (['', 'Node', True, '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''])},
         )
 
         self.focus(iid)
-        self.value_set(self.field.iid, iid, iid)
+        self.value_set(_IID, iid, iid)
         self.tags_reset()
 
+        bbox = self.bbox(iid, '#0')
         self.active_popup_widget = self.popup_widget(iid, '#0')
 
     def insert_leaf(self):
@@ -1240,7 +1263,7 @@ class Treeview(ttk.Treeview):
         if not item:
             parent = ''
             idx = tk.END
-        elif self.value_get(self.field.item, item) == 'Node':
+        elif self.value_get(_TYPE, item) == 'Node':
             idx = 0
             parent = item
         else:
@@ -1250,19 +1273,18 @@ class Treeview(ttk.Treeview):
         iid = self.insert(
             parent,
             idx,
-            text='',
-            values=('', 'Leaf', '', '', '0 Kb', datetime.now().strftime("%Y/%m/%d %H-%M-%S"), ''),
+            **{'text': '', 'values': (['', 'Leaf', '', '', '0 Kb', datetime.now().strftime("%Y/%m/%d %H-%M-%S"), ''])},
         )
 
         self.focus(iid)
-        self.value_set(self.field.iid, iid, iid)
+        self.value_set(_IID, iid, iid)
         self.tags_reset()
         self.active_popup_widget = self.popup_widget(iid, '#0')
 
     def populate(self, parent, data=()):
         for item in data:
             iid = self.insert(parent, tk.END, **item)
-            self.value_set(self.field.iid, iid, iid)
+            self.value_set(_IID, iid, iid)
 
             if 'children' in item:
                 self.populate(iid, item['children'])
@@ -1393,7 +1415,7 @@ class Treeview(ttk.Treeview):
                                     if result == '':
                                         continue
 
-                                    if result in (SKIP, CANCEL):
+                                    if result in (_SKIP, _CANCEL):
                                         return
 
                                     wdg_text = result
@@ -1472,17 +1494,20 @@ class Treeview(ttk.Treeview):
                 wdg.focus()
                 wdg.focus_set()
 
-                for command, callback in (
-                        ('<Up>', move_focus),
-                        ('<Shift-Up>', move_focus),
-                        ('<Down>', move_focus),
-                        ('<Shift-Down>', move_focus),
-                        ('<Tab>', tab),
-                        ('<Return>', update),
-                        ('<KP_Enter>', update),
-                        ('<Escape>', destroy),
-                        ('<Control-z>', destroy),
-                        ('<Control-a>', control_a)):
+                bindings = {
+                    '<Up>': move_focus,
+                    '<Shift-Up>': move_focus,
+                    '<Down>': move_focus,
+                    '<Shift-Down>': move_focus,
+                    '<Tab>': tab,
+                    # '<Control-ISO_Left_Tab>': tab,
+                    '<Return>': update,
+                    '<KP_Enter>': update,
+                    '<Escape>': destroy,
+                    '<Control-z>': destroy,
+                    '<Control-a>': control_a,
+                }
+                for command, callback in bindings.items():
                     wdg.bind(command, callback)
 
         elif _type == 'Combobox':
@@ -1525,13 +1550,16 @@ class Treeview(ttk.Treeview):
             wdg.var.set(text)
             wdg.icursor(tk.END)
 
-            for command, callback in (
-                    ('<Tab>', tab),
-                    ('<Return>', update),
-                    ('<KP_Enter>', update),
-                    ('<Escape>', destroy),
-                    ('<Control-z>', destroy),
-                    ('<Control-a>', control_a)):
+            bindings = {
+                '<Tab>': tab,
+                # '<Control-ISO_Left_Tab>': tab,
+                '<Return>': update,
+                '<KP_Enter>': update,
+                '<Escape>': destroy,
+                '<Control-z>': destroy,
+                '<Control-a>': control_a,
+            }
+            for command, callback in bindings.items():
                 wdg.bind(command, callback)
 
         return wdg
@@ -1551,30 +1579,32 @@ class Treeview(ttk.Treeview):
             self.active_popup_widget = None
 
     def bindings_set(self):
-        for command, callback in (
-                ('<Up>', self.popup_destroy),
-                ('<Down>', self.popup_destroy),
-                ('<Key>', self.key_press),
-                ('<Tab>', self.popup_widget_edit),
-                ('<Escape>', self.escape),
-                ('<Return>', self.popup_widget_edit),
-                ('<KP_Enter>', self.popup_widget_edit),
-                ('<Button-1>', self.button_click),
-                ('<Button-4>', self.wheel_mouse),
-                ('<Button-5>', self.wheel_mouse),
-                ('<Shift-Up>', self.shift_up),
-                ('<Shift-Down>', self.shift_down),
-                ('<Control-a>', self.control_a),
-                ('<Control-x>', self.cut),
-                ('<Control-c>', self.copy),
-                ('<Control-v>', self.paste),
-                ('<Control-z>', self.undo),
-                ('<KeyRelease>', self.key_release),
-                ('<ButtonPress-3>', self.popup_menu),
-                ('<Double-Button-1>', self.button_double_click),
-                ('<ButtonRelease-1>', self.button_release),
-                ('<<TreeviewOpen>>', self.expand_tree),
-                ('<<TreeviewClose>>', self.collapse_tree)):
+        bindings = {
+            '<Up>': self.popup_destroy,
+            '<Down>': self.popup_destroy,
+            '<Key>': self.key_press,
+            '<Tab>': self.popup_widget_edit,
+            '<Escape>': self.escape,
+            '<Return>': self.popup_widget_edit,
+            '<KP_Enter>': self.popup_widget_edit,
+            '<Button-1>': self.button_click,
+            '<Button-4>': self.wheel_mouse,
+            '<Button-5>': self.wheel_mouse,
+            '<Shift-Up>': self.shift_up,
+            '<Shift-Down>': self.shift_down,
+            '<Control-a>': self.control_a,
+            '<Control-x>': self.cut,
+            '<Control-c>': self.copy,
+            '<Control-v>': self.paste,
+            '<Control-z>': self.undo,
+            '<KeyRelease>': self.key_release,
+            '<ButtonPress-3>': self.popup_menu,
+            '<Double-Button-1>': self.button_double_click,
+            '<ButtonRelease-1>': self.button_release,
+            '<<TreeviewOpen>>': self.expand_tree,
+            '<<TreeviewClose>>': self.collapse_tree,
+        }
+        for command, callback in bindings.items():
             self.bind(command, callback)
 
 
