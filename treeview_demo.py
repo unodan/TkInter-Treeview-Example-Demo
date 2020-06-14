@@ -700,9 +700,8 @@ class Treeview(ttk.Treeview):
         dlg.entry.var.set(current_name)
         dlg.entry.select_range(0, tk.END)
         dlg.entry.icursor(tk.END)
+        dlg.entry.focus()
         dlg.entry.focus_set()
-
-        dlg.button_rename.focus()
 
         dlg.bind('<Return>', rename)
         dlg.bind('<KP_Enter>', rename)
@@ -877,6 +876,31 @@ class Treeview(ttk.Treeview):
 
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
+
+        for idx, column in enumerate(self.columns):
+            if 'unique' in column and column['unique'] and not idx:
+                text = kwargs['text']
+                children = self.get_children(parent)
+
+                column_values = []
+                for node in children:
+                    column_values.append(self.item(node, 'text'))
+
+                for node in children:
+                    while text == self.item(node, 'text'):
+                        result = self.dlg_rename(
+                            'Rename',
+                            f'The name "{text}" already exists, please choose another '
+                            f'name and try again.',
+                            text,
+                        )
+                        if result in (SKIP, CANCEL):
+                            return
+
+                        text = result
+
+                kwargs['text'] = text
+
         iid = super(Treeview, self).insert(parent, index, **kwargs)
 
         child_count = len(self.get_children(parent))
@@ -884,6 +908,7 @@ class Treeview(ttk.Treeview):
             word = 'item' if child_count == 1 else 'items'
             self.value_set(self.field.size, f'{len(self.get_children(parent))} {word}', parent)
         self.see(iid)
+
         return iid
 
     def escape(self, _):
@@ -1340,7 +1365,6 @@ class Treeview(ttk.Treeview):
                 item_text = self.item(_item, 'text')
 
                 if item_text != wdg_text:
-
                     if not item_text and not wdg_text:
                         wdg.destroy()
                         self.active_popup_widget = None
@@ -1386,11 +1410,12 @@ class Treeview(ttk.Treeview):
 
                         self.item(_item, text=wdg_text)
                     else:
+                        print(55555, idx-1, wdg.get(), _item)
                         self.value_set(idx-1, wdg.get(), _item)
 
                 wdg.destroy()
                 self.active_popup_widget = None
-                self.tags_reset()
+                # self.tags_reset()
                 self.focus_set()
                 self.selection_set(_item)
 
