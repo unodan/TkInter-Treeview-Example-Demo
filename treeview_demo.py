@@ -13,6 +13,7 @@ _path = Path(__file__).cwd()
 
 SKIP = 0
 CANCEL = 1
+SHIFT_KEY = 1
 
 LAST_ROW = 990
 LAST_COLUMN = 990
@@ -101,9 +102,13 @@ class App(tk.Tk):
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
                         {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
+                        # {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry'},
                         {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 130, 'minwidth': 3, 'stretch': tk.NO},
+                        # {'width': 130, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Combobox',
+                            'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
+                         },
                         {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
                             'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
                          },
@@ -1127,11 +1132,13 @@ class Treeview(ttk.Treeview):
             row = self.identify_row(event.y)
             column = self.identify_column(event.x)
 
+            self.active_popup_column = None
             wdg = self.active_popup_widget = self.popup_widget(row, column)
             if wdg:
                 self.active_popup_column = column
-                if isinstance(wdg, Entry):
-                    wdg.select_range(0, tk.END)
+                wdg.focus()
+                wdg.focus_set()
+                wdg.select_range(0, tk.END)
 
         elif region == 'separator':
             self.column_expand(event)
@@ -1301,17 +1308,30 @@ class Treeview(ttk.Treeview):
         _type = self.columns[idx].get('type', None)
 
         if _type == 'Entry':
-            def tab(_):
-                if int(column.lstrip('#')) >= len(self.columns)-1:
-                    self.active_popup_widget = self.popup_widget(self.focus(), '#0')
+            def tab(event):
+                offset = int(column.lstrip('#'))
+                column_count = len(self.field)
+
+                if not idx and event.state & SHIFT_KEY:
+                    self.active_popup_column = f'#{column_count}'
+                elif offset >= column_count:
                     self.active_popup_column = '#0'
-                else:
-                    for idx, data in enumerate(self.columns[int(column.lstrip('#'))+1:]):
+                elif 1 if event.state & 1 else 0:
+                    for index in reversed(list(range(0, offset))):
+                        data = self.columns[index]
                         if 'type' in data:
-                            self.active_popup_widget = self.popup_widget(self.focus(), f'#{idx+1}')
-                            self.active_popup_column = f'#{idx+1}'
-                            self.active_popup_widget.focus_set()
-                            self.active_popup_widget.select_range(0, tk.END)
+                            self.active_popup_column = f'#{index}'
+                            break
+                else:
+                    for index, data in enumerate(self.columns[offset+1:], offset):
+                        if 'type' in data:
+                            self.active_popup_column = f'#{index+1}'
+                            break
+
+                self.active_popup_widget = self.popup_widget(self.focus(), self.active_popup_column)
+                self.active_popup_widget.focus()
+                self.active_popup_widget.focus_set()
+                self.active_popup_widget.select_range(0, tk.END)
 
                 return 'break'
 
@@ -1441,6 +1461,7 @@ class Treeview(ttk.Treeview):
                         ('<Down>', move_focus),
                         ('<Shift-Down>', move_focus),
                         ('<Tab>', tab),
+                        ('<ISO_Left_Tab>', tab),
                         ('<Return>', update),
                         ('<KP_Enter>', update),
                         ('<Escape>', destroy),
@@ -1449,13 +1470,26 @@ class Treeview(ttk.Treeview):
                     wdg.bind(command, callback)
 
         elif _type == 'Combobox':
-            def tab(_):
-                if int(column.lstrip('#')) >= len(self.columns)-1:
-                    self.active_popup_widget = self.popup_widget(self.focus(), '#0')
-                else:
-                    for idx, data in enumerate(self.columns[int(column.lstrip('#'))+1:]):
+            def tab(event):
+                offset = int(column.lstrip('#'))
+                column_count = len(self.field)
+
+                if offset >= column_count and not event.state & 1:
+                    self.active_popup_column = '#0'
+                elif 1 if event.state & 1 else 0:
+                    for index in reversed(list(range(0, offset))):
+                        data = self.columns[index]
                         if 'type' in data:
-                            self.active_popup_widget = self.popup_widget(self.focus(), f'#{idx+1}')
+                            self.active_popup_column = f'#{index}'
+                            break
+                else:
+                    for index, data in enumerate(self.columns[offset+1:], offset):
+                        if 'type' in data:
+                            self.active_popup_column = f'#{index+1}'
+                            break
+
+                self.active_popup_widget = self.popup_widget(self.focus(), self.active_popup_column)
+                self.active_popup_widget.focus()
                 self.active_popup_widget.focus_set()
                 self.active_popup_widget.select_range(0, tk.END)
 
@@ -1490,6 +1524,7 @@ class Treeview(ttk.Treeview):
 
             for command, callback in (
                     ('<Tab>', tab),
+                    ('<ISO_Left_Tab>', tab),
                     ('<Return>', update),
                     ('<KP_Enter>', update),
                     ('<Escape>', destroy),
