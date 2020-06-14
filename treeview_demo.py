@@ -35,12 +35,10 @@ class App(tk.Tk):
 
         self.style = ttk.Style()
         self.style.theme_use('clam')
+        self.platform = 'linux' if 'linux' in platform else platform
 
         self.title('Treeview Demo')
         self.protocol('WM_DELETE_WINDOW', self.exit)
-
-        if 'linux' in platform:
-            self.platform = 'linux'
 
         self.setup()
 
@@ -464,6 +462,7 @@ class Treeview(ttk.Treeview):
             self.menu_background = None
 
         self.cursor_offset = 0
+        self.platform = parent.winfo_toplevel().platform
 
         self.style = ttk.Style()
         self.indent = self.style.lookup('Treeview', 'indent')
@@ -1460,8 +1459,8 @@ class Treeview(ttk.Treeview):
                         ('<Shift-Up>', move_focus),
                         ('<Down>', move_focus),
                         ('<Shift-Down>', move_focus),
-                        ('<Tab>', tab),
-                        ('<ISO_Left_Tab>', tab),
+                        ('<KeyPress-Tab>', tab),
+                        ('<ISO_Left_Tab>' if self.platform == 'linux' else '<Control-Shift-KeyPress-Tab>', tab),
                         ('<Return>', update),
                         ('<KP_Enter>', update),
                         ('<Escape>', destroy),
@@ -1523,8 +1522,8 @@ class Treeview(ttk.Treeview):
             wdg.icursor(tk.END)
 
             for command, callback in (
-                    ('<Tab>', tab),
-                    ('<ISO_Left_Tab>', tab),
+                    ('<KeyPress-Tab>', tab),
+                    ('<ISO_Left_Tab>' if self.platform == 'linux' else '<Control-Shift-KeyPress-Tab>', tab),
                     ('<Return>', update),
                     ('<KP_Enter>', update),
                     ('<Escape>', destroy),
