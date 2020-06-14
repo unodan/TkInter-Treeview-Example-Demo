@@ -1337,7 +1337,6 @@ class Treeview(ttk.Treeview):
                 _item = self.focus()
                 wdg_text = wdg.var.get().strip(' ')
                 item_text = self.item(_item, 'text')
-
                 if item_text != wdg_text:
                     if not item_text and not wdg_text:
                         wdg.destroy()
@@ -1385,12 +1384,19 @@ class Treeview(ttk.Treeview):
                         self.item(_item, text=wdg_text)
                     else:
                         self.value_set(idx-1, wdg.get(), _item)
+                elif not wdg_text:
+                    node = self.next(_item)
+                    if not node:
+                        node = self.prev(_item)
+                    self.delete(_item)
+
+                    self.focus(node)
+                    self.selection_set(node)
 
                 wdg.destroy()
                 self.active_popup_widget = None
-                # self.tags_reset()
+                self.tags_reset()
                 self.focus_set()
-                self.selection_set(_item)
 
             def destroy(_=None):
                 wdg.destroy()
