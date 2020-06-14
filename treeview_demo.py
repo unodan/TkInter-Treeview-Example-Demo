@@ -8,7 +8,6 @@ from enum import IntEnum
 from pathlib import Path
 from datetime import datetime
 
-
 _path = Path(__file__).cwd()
 
 SKIP = -1
@@ -247,26 +246,6 @@ class RenameDialog(DialogBase):
         frame.grid(row=1, sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
 
 
-class MessageDialog(DialogBase):
-    def __init__(self, parent, **kwargs):
-        message = kwargs.pop('message', '')
-        super().__init__(parent, **kwargs)
-
-        frame = self.row0 = ttk.Frame(self.container)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
-        self.label = ttk.Label(frame, text=message)
-        self.label.grid(sticky=tk.NSEW, pady=5, row=0, column=0)
-        frame.grid(sticky=tk.EW, padx=10, pady=(20, 0))
-
-        frame = self.row1 = ttk.Frame(self.container)
-        frame.rowconfigure(0, weight=1)
-        frame.columnconfigure(0, weight=1)
-        self.button_ok = ttk.Button(frame, text="Okay")
-        self.button_ok.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
-        frame.grid(row=1, sticky=tk.EW, padx=10, pady=(10, 20))
-
-
 class Text(tk.Text):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
@@ -447,7 +426,9 @@ class Treeview(ttk.Treeview):
         super().__init__(self.frame, **kwargs)
 
         self.detached = []
+
         self.undo_data = {}
+        self.menu_images = {}
         self.sorted_columns = {}
 
         self.shift = \
@@ -499,6 +480,14 @@ class Treeview(ttk.Treeview):
             opts = dict(self.style.map('Treeview', 'background'))
             background = self.style.lookup('Treeview.Heading', 'background')
 
+            file = _path.joinpath('images')
+            if file.exists():
+                for name in ('cut', 'copy', 'paste', 'delete', 'activities', 'box', 'menu_new'):
+                    if Path(file.joinpath(f'{name}.png')).is_file():
+                        image = tk.PhotoImage(file=Path(file.joinpath(f'{name}.png')).resolve())
+                        if image:
+                            self.menu_images[name] = image
+
             popup = self.popup = tk.Menu(
                 self.winfo_toplevel(),
                 tearoff=0,
@@ -514,17 +503,19 @@ class Treeview(ttk.Treeview):
                 activebackground=opts['selected']
             )
 
-            popup.add_cascade(label="Insert", menu=create_new)
+            popup.add_cascade(label="Insert", menu=create_new, compound=tk.LEFT, image=self.menu_images['activities'])
             popup.add_separator()
-            popup.add_command(label="Cut", command=self.cut)
-            popup.add_command(label="Copy", command=self.copy)
-            popup.add_command(label="Paste", command=self.paste)
+            popup.add_command(label="Cut", command=self.cut, compound=tk.LEFT, image=self.menu_images['cut'])
+            popup.add_command(label="Copy", command=self.copy, compound=tk.LEFT, image=self.menu_images['copy'])
+            popup.add_command(label="Paste", command=self.paste, compound=tk.LEFT, image=self.menu_images['paste'])
             popup.add_separator()
-            popup.add_command(label="Delete", command=self.detach)
+            popup.add_command(label="Delete", command=self.detach, compound=tk.LEFT, image=self.menu_images['delete'])
 
-            create_new.add_command(label="Item", command=self.insert_leaf)
+            create_new.add_command(
+                label="Folder", command=self.insert_node, compound=tk.LEFT, image=self.menu_images['menu_new'])
             create_new.add_separator()
-            create_new.add_command(label="Folder", command=self.insert_node)
+            create_new.add_command(
+                label="Item", command=self.insert_leaf, compound=tk.LEFT, image=self.menu_images['box'])
 
         def set_scrollbars():
             scroll_x, scroll_y = self.scroll
@@ -718,6 +709,7 @@ class Treeview(ttk.Treeview):
         dlg.button_cancel.bind('<Return>', cancel)
         dlg.button_cancel.bind('<KP_Enter>', cancel)
 
+        self.selection_set(self.focus())
         if self.active_popup_widget:
             x = self.active_popup_widget.winfo_rootx()
             y = self.active_popup_widget.winfo_rooty()
@@ -742,45 +734,6 @@ class Treeview(ttk.Treeview):
         root.wait_window(dlg)
 
         return self.dlg_results
-
-    def dlg_message(self, title, message):
-        def ok(_=None):
-            dlg.destroy()
-
-        root = self.winfo_toplevel()
-        dlg = MessageDialog(root, width=320, height=130, title=title, message=message)
-        dlg.update_idletasks()
-        dlg.label.config(wraplength=dlg.container.winfo_width())
-        dlg.button_ok.focus()
-
-        dlg.button_ok.config(command=ok)
-        dlg.button_ok.bind('<Return>', ok)
-        dlg.button_ok.bind('<KP_Enter>', ok)
-
-        if self.active_popup_widget:
-            x = self.active_popup_widget.winfo_rootx()
-            y = self.active_popup_widget.winfo_rooty()
-        else:
-            bbox = self.bbox(self.focus())
-            x, y, _, _ = bbox
-            x += root.winfo_rootx()
-            y += root.winfo_rooty()
-
-        item = self.identify('item', x, y-self.winfo_rooty())
-
-        widest = 0
-        font = self.default_font
-        for node in self.get_children(self.parent(item)):
-            size = font.measure(self.item(node, 'text'))
-            if size > widest:
-                widest = size + font.measure('W')
-
-        x += widest
-        y += self.rowheight + self.rowheight // 2
-
-        dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
-
-        root.wait_window(dlg)
 
     def cut(self, _=None):
         def set_selections(_item):
@@ -868,6 +821,7 @@ class Treeview(ttk.Treeview):
             self.selection_set(self.focus())
 
     def delete(self, *items):
+        items = list(items)
         for item in items:
             parent = self.parent(item)
             if parent:
@@ -875,7 +829,10 @@ class Treeview(ttk.Treeview):
                 word = 'item' if value == 1 else 'items'
                 self.value_set(self.field.size, f'{value} {word}', parent)
 
-        super(Treeview, self).delete(*items)
+        if '' in items:
+            items.pop(items.index(''))
+        if items:
+            super(Treeview, self).delete(*items)
 
     def insert(self, parent, index=tk.END, **kwargs):
         kwargs.pop('children', None)
@@ -1493,8 +1450,12 @@ class Treeview(ttk.Treeview):
                 # wdg.icursor(tk.END)
                 wdg.focus()
                 wdg.focus_set()
+                wdg.icursor(tk.END)
                 wdg.select_range(0, tk.END)
                 wdg.place(x=x_pos+4, y=y_pos, anchor='w', width=width-4)
+
+                self.selection_remove(*self.selection())
+                self.selection_set(self.focus())
 
                 for command, callback in (
                         ('<Up>', move_focus),
@@ -1560,8 +1521,13 @@ class Treeview(ttk.Treeview):
             values = self.columns[idx].get('values', '')
             wdg = Combobox(self, state=state, values=values)
             wdg.place(x=x_pos, y=y_pos, anchor='w', width=width-2)
+
             wdg.var.set(text)
             wdg.icursor(tk.END)
+            wdg.select_range(0, tk.END)
+
+            self.selection_remove(*self.selection())
+            self.selection_set(self.focus())
 
             for command, callback in (
                     ('<KeyPress-Tab>', tab),
