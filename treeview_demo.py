@@ -509,6 +509,8 @@ class Treeview(ttk.Treeview):
             popup.add_command(label="Copy", command=self.copy, compound=tk.LEFT, image=self.menu_images['copy'])
             popup.add_command(label="Paste", command=self.paste, compound=tk.LEFT, image=self.menu_images['paste'])
             popup.add_separator()
+            popup.add_command(label="Undo", command=self.undo, compound=tk.LEFT, image=self.menu_images['undo'])
+            popup.add_separator()
             popup.add_command(label="Delete", command=self.detach, compound=tk.LEFT, image=self.menu_images['delete'])
             popup.add_separator()
             popup.add_command(label="Undo", command=self.undo, compound=tk.LEFT, image=self.menu_images['undo'])
