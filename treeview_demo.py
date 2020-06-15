@@ -82,7 +82,6 @@ class App(tk.Tk):
             if file.exists():
                 with open(str(file)) as f:
                     setup = json.load(f)
-
             else:
                 setup = {
                     'headings': (
@@ -119,11 +118,11 @@ class App(tk.Tk):
                 folders = self.dlg_populate_tree(
                     'Populate Tree',
                     'Enter the number of test folders to generate.',
-                    500,
+                    1,
                 )
 
                 test_items = []
-                for idx in range(0, folders+1):
+                for idx in range(0, folders):
                     now = datetime.now()
                     dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
                     data = {
@@ -191,9 +190,9 @@ class App(tk.Tk):
 
             json.dump(data, f, indent=3)
 
-    def dlg_populate_tree(self, title, message, folder_count=1000):
+    def dlg_populate_tree(self, title, message, count=100):
         def okay(_=None):
-            self.dlg_results = dlg.entry.var.get()
+            self.dlg_results = dlg.entry.get()
             dlg.destroy()
 
         def cancel(_=None):
@@ -201,16 +200,7 @@ class App(tk.Tk):
             dlg.destroy()
 
         root = self.winfo_toplevel()
-        dlg = PopulateTreeviewDialog(root, width=320, height=150, title=title, message=message)
-        dlg.update_idletasks()
-
-        dlg.label.config(wraplength=dlg.winfo_width())
-
-        dlg.entry.var.set(folder_count)
-        dlg.entry.select_range(0, tk.END)
-        dlg.entry.icursor(tk.END)
-        dlg.entry.focus()
-        dlg.entry.focus_set()
+        dlg = PopulateTreeviewDialog(root, width=320, height=150, title=title, message=message, count=count)
 
         dlg.bind('<Return>', okay)
         dlg.bind('<KP_Enter>', okay)
@@ -223,13 +213,15 @@ class App(tk.Tk):
         dlg.button_cancel.bind('<Return>', cancel)
         dlg.button_cancel.bind('<KP_Enter>', cancel)
 
+        dlg.label.config(wraplength=dlg.winfo_width())
         x = self.winfo_rootx() + self.winfo_width()//2 - dlg.winfo_width()//2
         y = self.winfo_rooty() + self.winfo_height()//2 - dlg.winfo_height()//2
         dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
 
         root.wait_window(dlg)
 
-        return int(self.dlg_results)
+        if self.dlg_results is not None:
+            return int(self.dlg_results)
 
 
 class Event:
@@ -297,13 +289,21 @@ class RenameDialog(DialogBase):
         self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=2, padx=(5, 0))
 
         frame.grid(row=1, sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+        self.protocol('WM_DELETE_WINDOW', self.destroy)
+        self.grab_set()
+
+    def destroy(self):
+        self.grab_release()
+        super(RenameDialog, self).destroy()
 
 
 class PopulateTreeviewDialog(DialogBase):
     def __init__(self, parent, **kwargs):
+        count = kwargs.pop('count', 100)
         message = kwargs.pop('message', 'No Message!')
         super().__init__(parent, **kwargs)
         self.attributes('-topmost', True)
+
         self.container.rowconfigure(0, weight=1)
         self.container.columnconfigure(0, weight=1)
 
@@ -314,7 +314,8 @@ class PopulateTreeviewDialog(DialogBase):
         self.label.grid(sticky=tk.EW, pady=(0, 10), row=0, column=0)
 
         self.entry = Entry(frame)
-        self.entry.config(textvariable=self.entry.var)
+        self.entry.set(count)
+
         self.entry.grid(sticky=tk.NSEW, row=1, column=0, padx=(5, 0))
         frame.grid(row=0, sticky=tk.NSEW, padx=10, pady=(20, 0))
 
@@ -328,6 +329,13 @@ class PopulateTreeviewDialog(DialogBase):
         self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=2, padx=(5, 0))
 
         frame.grid(row=1, sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+
+        self.protocol('WM_DELETE_WINDOW', self.destroy)
+        self.grab_set()
+
+    def destroy(self):
+        self.grab_release()
+        super(PopulateTreeviewDialog, self).destroy()
 
 
 class Text(tk.Text):
@@ -356,6 +364,12 @@ class Entry(ttk.Entry):
 
         self.setup()
         self.bindings_set()
+
+    def get(self):
+        return self.var.get()
+
+    def set(self, value):
+        self.var.set(value)
 
     def setup(self):
         def set_popup_menu():
@@ -772,7 +786,7 @@ class Treeview(ttk.Treeview):
             dlg.destroy()
 
         def rename(_=None):
-            self.dlg_results = dlg.entry.var.get()
+            self.dlg_results = dlg.entry.get()
             dlg.destroy()
 
         root = self.winfo_toplevel()
@@ -781,11 +795,11 @@ class Treeview(ttk.Treeview):
 
         dlg.label.config(wraplength=dlg.winfo_width())
 
-        dlg.entry.var.set(current_name)
-        dlg.entry.select_range(0, tk.END)
-        dlg.entry.icursor(tk.END)
+        dlg.entry.set(current_name)
         dlg.entry.focus()
         dlg.entry.focus_set()
+        dlg.entry.icursor(tk.END)
+        dlg.entry.select_range(0, tk.END)
 
         dlg.bind('<Return>', rename)
         dlg.bind('<KP_Enter>', rename)
@@ -802,24 +816,27 @@ class Treeview(ttk.Treeview):
         dlg.button_cancel.bind('<Return>', cancel)
         dlg.button_cancel.bind('<KP_Enter>', cancel)
 
-        self.selection_set(self.focus())
+        item = self.focus()
+        self.selection_set(item)
         if self.active_popup_widget:
             x = self.active_popup_widget.winfo_rootx()
             y = self.active_popup_widget.winfo_rooty()
         else:
-            bbox = self.bbox(self.focus())
+            bbox = self.bbox(item)
             x, y, _, _ = bbox
             x += root.winfo_rootx()
             y += root.winfo_rooty()
 
-        widest = 0
+        widest_cell = 0
         font = self.default_font
-        for node in self.get_children(self.focus()):
-            size = font.measure(self.item(node, 'text'))
-            if size > widest:
-                widest = size + font.measure('W')
+        char_width = font.measure('W')
 
-        x += (widest + font.measure('W') + self.indent * self.item_depth(self.focus()))
+        for node in self.get_children(item):
+            size = font.measure(self.item(node, 'text'))
+            if size > widest_cell:
+                widest_cell = size + char_width
+
+        x += (self.indent * self.item_depth(item) + widest_cell + char_width)
         y += self.rowheight + self.rowheight // 2
 
         dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
@@ -858,6 +875,8 @@ class Treeview(ttk.Treeview):
         for item, (parent, idx) in self.undo_data.items():
             self.reattach(item, parent, idx)
             self.selection_remove(item)
+
+        self.undo_data = {}
         self.tags_reset()
 
     def copy(self, _=None):
@@ -1153,7 +1172,7 @@ class Treeview(ttk.Treeview):
 
         return 'break'
 
-    def button_click(self, _):
+    def button_click1(self, _):
         if isinstance(self.focus_get(), Entry):
             if not self.focus_get().var.get().strip(' '):
                 self.focus_get().destroy()
@@ -1204,7 +1223,61 @@ class Treeview(ttk.Treeview):
             if not column and wdg_text:
                 self.item(self.focus(), text=wdg_text)
             else:
-                self.value_set(column-1, wdg_text, self.focus())
+                self.value_set(column - 1, wdg_text, self.focus())
+
+            self.active_popup_widget = None
+            self.tags_reset()
+
+    def button_click(self, _):
+        item = self.focus()
+        wdg = self.focus_get()
+
+        if isinstance(wdg, Entry):
+            if not wdg.var.get().strip(' '):
+                wdg.destroy()
+                self.delete(self.focus())
+                self.tags_reset()
+                return
+
+        if self.active_popup_widget:
+            item_text = self.item(item, 'text')
+            wdg_text = self.active_popup_widget.var.get().strip(' ')
+
+            column = int(self.active_popup_column.lstrip('#'))
+            unique = self.columns[column].get('unique', False)
+
+            self.active_popup_widget.destroy()
+            self.active_popup_widget = None
+
+            if item_text == wdg_text and not item_text:
+                self.delete(item)
+                self.tags_reset()
+                return
+
+            if not item_text and not wdg_text:
+                self.delete(item)
+                self.tags_reset()
+                return
+
+            if not item_text:
+                if unique:
+                    for node in self.get_children(self.parent(item)):
+                        if wdg_text == self.item(node, 'text'):
+                            self.delete(item)
+                            self.tags_reset()
+                            return
+                else:
+                    return
+
+            if unique:
+                for node in self.get_children(self.parent(item)):
+                    if wdg_text == self.item(node, 'text'):
+                        return
+
+            if not column and wdg_text:
+                self.item(item, text=wdg_text)
+            else:
+                self.value_set(column - 1, wdg_text, self.focus())
 
             self.active_popup_widget = None
             self.tags_reset()
@@ -1351,6 +1424,7 @@ class Treeview(ttk.Treeview):
         return data
 
     def popup_menu(self, event):
+
         region = self.identify_region(event.x, event.y)
         if region == 'heading':
             return
@@ -1675,6 +1749,7 @@ class Treeview(ttk.Treeview):
                 ('<Control-d>', self.cut),
                 ('<Control-f>', self.insert_node),
                 ('<Control-i>', self.insert_leaf),
+                ('<Control-m>', self.popup_menu),
                 ('<KeyRelease>', self.key_release),
                 ('<ButtonPress-3>', self.popup_menu),
                 ('<Double-Button-1>', self.button_double_click),
