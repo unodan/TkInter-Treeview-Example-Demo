@@ -512,8 +512,6 @@ class Treeview(ttk.Treeview):
             popup.add_command(label="Undo", command=self.undo, compound=tk.LEFT, image=self.menu_images['undo'])
             popup.add_separator()
             popup.add_command(label="Delete", command=self.detach, compound=tk.LEFT, image=self.menu_images['delete'])
-            popup.add_separator()
-            popup.add_command(label="Undo", command=self.undo, compound=tk.LEFT, image=self.menu_images['undo'])
 
             create_new.add_command(
                 label="Folder", command=self.insert_node, compound=tk.LEFT, image=self.menu_images['menu_new'])
