@@ -138,7 +138,7 @@ class App(tk.Tk):
                                 {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
                                 {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
                                 {'text': 'Empty Folder', 'open': 1, 'values':
-                                    ('', 'Node', True, '', '', dt_string, '')},
+                                    ('', 'Node', True, '', '0 items', dt_string, '')},
                                 )},
                         )}
                     test_items.append(data)
@@ -589,19 +589,26 @@ class Treeview(ttk.Treeview):
 
             popup.add_cascade(label="Insert", menu=create_new, compound=tk.LEFT, image=self.menu_images['activities'])
             popup.add_separator()
-            popup.add_command(label="Cut", command=self.cut, compound=tk.LEFT, image=self.menu_images['cut'])
-            popup.add_command(label="Copy", command=self.copy, compound=tk.LEFT, image=self.menu_images['copy'])
-            popup.add_command(label="Paste", command=self.paste, compound=tk.LEFT, image=self.menu_images['paste'])
+            popup.add_command(label="Cut", command=self.cut, compound=tk.LEFT, accelerator='Ctrl+X',
+                              image=self.menu_images['cut'])
+            popup.add_command(label="Copy", command=self.copy, compound=tk.LEFT, accelerator='Ctrl+C',
+                              image=self.menu_images['copy'])
+            popup.add_command(label="Paste", command=self.paste, compound=tk.LEFT, accelerator='Ctrl+V',
+                              image=self.menu_images['paste'])
             popup.add_separator()
-            popup.add_command(label="Undo", command=self.undo, compound=tk.LEFT, image=self.menu_images['undo'])
+            popup.add_command(label="Undo", command=self.undo, compound=tk.LEFT, accelerator='Ctrl+Z',
+                              image=self.menu_images['undo'])
             popup.add_separator()
-            popup.add_command(label="Delete", command=self.detach, compound=tk.LEFT, image=self.menu_images['delete'])
+            popup.add_command(label="Delete", command=self.detach, compound=tk.LEFT, accelerator='Ctrl+D',
+                              image=self.menu_images['delete'])
 
             create_new.add_command(
-                label="Folder", command=self.insert_node, compound=tk.LEFT, image=self.menu_images['menu_new'])
+                label="Folder", command=self.insert_node, compound=tk.LEFT, accelerator='Ctrl+F',
+                image=self.menu_images['menu_new'])
             create_new.add_separator()
             create_new.add_command(
-                label="Item", command=self.insert_leaf, compound=tk.LEFT, image=self.menu_images['box'])
+                label="Item", command=self.insert_leaf, compound=tk.LEFT, accelerator='Ctrl+I',
+                image=self.menu_images['box'])
 
         def set_scrollbars():
             scroll_x, scroll_y = self.scroll
@@ -1256,8 +1263,9 @@ class Treeview(ttk.Treeview):
 
         return depth
 
-    def insert_leaf(self):
-        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
+    def insert_leaf(self, _=None):
+        item = self.focus() if isinstance(_, tk.Event) else self.identify(
+            'item', self.popup.x, self.popup.y-self.winfo_rooty())
 
         if not item:
             parent = ''
@@ -1281,12 +1289,9 @@ class Treeview(ttk.Treeview):
         self.value_set(self.field.iid, iid, iid)
         self.popup_widget(iid, '#0')
 
-        # wdg.focus()
-        # wdg.focus_set()
-        # wdg.select_range(0, tk.END)
-
-    def insert_node(self):
-        item = self.identify('item', self.popup.x, self.popup.y-self.winfo_rooty())
+    def insert_node(self, _=None):
+        item = self.focus() if isinstance(_, tk.Event) else self.identify(
+            'item', self.popup.x, self.popup.y-self.winfo_rooty())
 
         if not item:
             parent = ''
@@ -1303,7 +1308,7 @@ class Treeview(ttk.Treeview):
             idx,
             open=True,
             text='',
-            values=('', 'Node', True, '', '', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''),
+            values=('', 'Node', True, '', '0 items', datetime.now().strftime("%Y/%m/%d %H:%M:%S"), ''),
         )
 
         self.focus(iid)
@@ -1540,7 +1545,6 @@ class Treeview(ttk.Treeview):
             if mode == tk.WRITABLE:
                 wdg = Entry(self)
                 wdg.var.set(text)
-                # wdg.icursor(tk.END)
                 wdg.focus()
                 wdg.focus_set()
                 wdg.icursor(tk.END)
@@ -1668,6 +1672,9 @@ class Treeview(ttk.Treeview):
                 ('<Control-c>', self.copy),
                 ('<Control-v>', self.paste),
                 ('<Control-z>', self.undo),
+                ('<Control-d>', self.cut),
+                ('<Control-f>', self.insert_node),
+                ('<Control-i>', self.insert_leaf),
                 ('<KeyRelease>', self.key_release),
                 ('<ButtonPress-3>', self.popup_menu),
                 ('<Double-Button-1>', self.button_double_click),
