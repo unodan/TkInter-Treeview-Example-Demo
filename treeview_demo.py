@@ -52,6 +52,8 @@ class App(tk.Tk):
                     'geometry': '500x700',
                 }
 
+            self.geometry(self.app_data['geometry'])
+
         def setup_treeview():
             tv_line_padding = 8
             tv_heading_padding = 3
@@ -80,45 +82,50 @@ class App(tk.Tk):
             if file.exists():
                 with open(str(file)) as f:
                     setup = json.load(f)
-            else:
-                now = datetime.now()
-                dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
-                setup = {'headings': (
-                    {'text': 'Name', 'anchor': tk.W},
-                    {'text': 'IID', 'anchor': tk.W},
-                    {'text': 'Item', 'anchor': tk.W},
-                    {'text': 'Open', 'anchor': tk.W},
-                    {'text': 'Tags', 'anchor': tk.W},
-                    {'text': 'Size', 'anchor': tk.W},
-                    {'text': 'Last Modified', 'anchor': tk.W},
-                    {'text': 'Data', 'anchor': tk.W},
-                ), 'columns': (
-                    {'width': 180, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry', 'unique': True},
-                    {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
-                    {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
-                    {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
-                    # {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
-                    {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry'},
-                    {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
-                    # {'width': 130, 'minwidth': 3, 'stretch': tk.NO},
-                    {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Combobox',
-                     'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
-                     },
-                    {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
-                     'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
-                     },
-                ), 'data': []}
 
-                # file = _path.joinpath('treeview.json')
-                # folders = None
-                # if not file.exists():
-                #     folders = self.dlg_populate_tree(
-                #         'Populate Tree',
-                #         'Enter the number of test folders to generate.'
-                #     )
+            else:
+                setup = {
+                    'headings': (
+                        {'text': 'Name', 'anchor': tk.W},
+                        {'text': 'IID', 'anchor': tk.W},
+                        {'text': 'Item', 'anchor': tk.W},
+                        {'text': 'Open', 'anchor': tk.W},
+                        {'text': 'Tags', 'anchor': tk.W},
+                        {'text': 'Size', 'anchor': tk.W},
+                        {'text': 'Last Modified', 'anchor': tk.W},
+                        {'text': 'Data', 'anchor': tk.W}),
+                    'columns': (
+                        {'width': 180, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry', 'unique': True},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                        # {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry'},
+                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
+                        # {'width': 130, 'minwidth': 3, 'stretch': tk.NO},
+                        {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Combobox',
+                            'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
+                         },
+                        {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
+                            'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
+                         },
+                    )}
+
+            show_dialog = True if 'data' not in setup else False
+            tree = self.treeview = Treeview(self.frame, setup=setup)
+            tree.grid(row=0, column=0, sticky=tk.NSEW)
+
+            if show_dialog:
+                folders = self.dlg_populate_tree(
+                    'Populate Tree',
+                    'Enter the number of test folders to generate.',
+                    500,
+                )
 
                 test_items = []
-                for idx in range(0, 100+1):
+                for idx in range(0, folders+1):
+                    now = datetime.now()
+                    dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
                     data = {
                         'text': f'Folder {idx}', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
                         'children': (
@@ -134,20 +141,20 @@ class App(tk.Tk):
                                     ('', 'Node', True, '', '', dt_string, '')},
                                 )},
                         )}
-
                     test_items.append(data)
-                setup['data'] = test_items
-
-            tree = self.treeview = Treeview(self.frame, setup=setup)
-            tree.focus_set()
-            tree.see(tree.get_children()[0])
+                tree.populate('', test_items)
+                tree.tags_reset()
 
             settings = dict(setup.get('settings', ()))
 
             view = settings.get('view')
             if view:
-                self.treeview.xview('moveto', view[0])
-                self.treeview.yview('moveto', view[1])
+                tree.xview('moveto', view[0])
+                tree.yview('moveto', view[1])
+
+            tree.focus_set()
+            if tree.get_children():
+                tree.see(tree.get_children()[0])
 
             item = settings.get('focus')
             if (not item or not tree.exists(item)) and tree.get_children():
@@ -159,8 +166,6 @@ class App(tk.Tk):
 
         setup_app()
         setup_treeview()
-
-        self.geometry(self.app_data['geometry'])
 
     def exit(self):
         self.app_data.update({'geometry': self.geometry()})
@@ -218,11 +223,13 @@ class App(tk.Tk):
         dlg.button_cancel.bind('<Return>', cancel)
         dlg.button_cancel.bind('<KP_Enter>', cancel)
 
-        # dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
+        x = self.winfo_rootx() + self.winfo_width()//2 - dlg.winfo_width()//2
+        y = self.winfo_rooty() + self.winfo_height()//2 - dlg.winfo_height()//2
+        dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
 
         root.wait_window(dlg)
 
-        return self.dlg_results
+        return int(self.dlg_results)
 
 
 class Event:
@@ -296,6 +303,7 @@ class PopulateTreeviewDialog(DialogBase):
     def __init__(self, parent, **kwargs):
         message = kwargs.pop('message', 'No Message!')
         super().__init__(parent, **kwargs)
+        self.attributes('-topmost', True)
         self.container.rowconfigure(0, weight=1)
         self.container.columnconfigure(0, weight=1)
 
@@ -1304,6 +1312,7 @@ class Treeview(ttk.Treeview):
         self.popup_widget(iid, '#0')
 
     def populate(self, parent, data=()):
+
         for item in data:
             iid = self.insert(parent, tk.END, **item)
             self.value_set(self.field.iid, iid, iid)
