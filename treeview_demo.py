@@ -54,7 +54,7 @@ class App(tk.Tk):
 
         def setup_treeview():
             tv_line_padding = 8
-            tv_heading_padding = 5
+            tv_heading_padding = 3
             tv_heading_border_width = 2
             font = tkfont.nametofont('TkDefaultFont')
             self.linespace = font.metrics('linespace')
@@ -83,71 +83,79 @@ class App(tk.Tk):
             else:
                 now = datetime.now()
                 dt_string = now.strftime("%Y/%m/%d %H:%M:%S")
-                setup = {
-                    'headings': (
-                        {'text': 'Name', 'anchor': tk.W},
-                        {'text': 'IID', 'anchor': tk.W},
-                        {'text': 'Item', 'anchor': tk.W},
-                        {'text': 'Open', 'anchor': tk.W},
-                        {'text': 'Tags', 'anchor': tk.W},
-                        {'text': 'Size', 'anchor': tk.W},
-                        {'text': 'Last Modified', 'anchor': tk.W},
-                        {'text': 'Data', 'anchor': tk.W},
-                    ),
-                    'columns': (
-                        {'width': 180, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry', 'unique': True},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
-                        # {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry'},
-                        {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
-                        # {'width': 130, 'minwidth': 3, 'stretch': tk.NO},
-                        {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Combobox',
-                            'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
-                         },
-                        {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
-                            'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
-                         },
-                    ),
-                    'data': (
-                        {'text': 'Folder 0', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
-                         'children': (
-                             {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                             {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                             {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                             {'text': 'Folder 0_1', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
-                              'children': (
-                                  {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                                  {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                                  {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                              )},
-                         )},
-                        {'text': 'Folder 1', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
-                         'children': (
-                             {'text': 'photo4.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                             {'text': 'photo5.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                             {'text': 'photo6.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
-                         )},
-                    ),
-                }
+                setup = {'headings': (
+                    {'text': 'Name', 'anchor': tk.W},
+                    {'text': 'IID', 'anchor': tk.W},
+                    {'text': 'Item', 'anchor': tk.W},
+                    {'text': 'Open', 'anchor': tk.W},
+                    {'text': 'Tags', 'anchor': tk.W},
+                    {'text': 'Size', 'anchor': tk.W},
+                    {'text': 'Last Modified', 'anchor': tk.W},
+                    {'text': 'Data', 'anchor': tk.W},
+                ), 'columns': (
+                    {'width': 180, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry', 'unique': True},
+                    {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                    {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                    {'width': 70, 'minwidth': 3, 'stretch': tk.NO},
+                    # {'width': 120, 'minwidth': 3, 'stretch': tk.NO},
+                    {'width': 120, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Entry'},
+                    {'width': 80, 'minwidth': 3, 'stretch': tk.NO},
+                    # {'width': 130, 'minwidth': 3, 'stretch': tk.NO},
+                    {'width': 130, 'minwidth': 3, 'stretch': tk.NO, 'type': 'Combobox',
+                     'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
+                     },
+                    {'width': 180, 'minwidth': 3, 'stretch': tk.YES, 'type': 'Combobox',
+                     'values': ('Value 1', 'Value 2', 'Value 3', 'Value 4', 'Value 5'),
+                     },
+                ), 'data': []}
+
+                # file = _path.joinpath('treeview.json')
+                # folders = None
+                # if not file.exists():
+                #     folders = self.dlg_populate_tree(
+                #         'Populate Tree',
+                #         'Enter the number of test folders to generate.'
+                #     )
+
+                test_items = []
+                for idx in range(0, 100+1):
+                    data = {
+                        'text': f'Folder {idx}', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
+                        'children': (
+                            {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                            {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                            {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                            {'text': 'Folder 0_1', 'open': 1, 'values': ('', 'Node', True, '', '', dt_string, ''),
+                             'children': (
+                                {'text': 'photo1.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                                {'text': 'photo2.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                                {'text': 'photo3.png', 'values': ('', 'Leaf', '', '', '0 Kb', dt_string, '')},
+                                {'text': 'Empty Folder', 'open': 1, 'values':
+                                    ('', 'Node', True, '', '', dt_string, '')},
+                                )},
+                        )}
+
+                    test_items.append(data)
+                setup['data'] = test_items
 
             tree = self.treeview = Treeview(self.frame, setup=setup)
             tree.focus_set()
+            tree.see(tree.get_children()[0])
 
             settings = dict(setup.get('settings', ()))
-            item = settings.get('focus')
-            if (not item or not tree.exists(item)) and tree.get_children():
-                item = tree.get_children()[0]
 
-            view = settings.get('view', None)
+            view = settings.get('view')
             if view:
                 self.treeview.xview('moveto', view[0])
                 self.treeview.yview('moveto', view[1])
 
-            tree.focus(item)
-            tree.selection_add(item)
-            tree.grid(sticky=tk.NSEW, row=0, column=0)
+            item = settings.get('focus')
+            if (not item or not tree.exists(item)) and tree.get_children():
+                item = tree.get_children()[0]
+            if item:
+                tree.focus(item)
+                tree.selection_add(item)
+                tree.grid(sticky=tk.NSEW, row=0, column=0)
 
         setup_app()
         setup_treeview()
@@ -177,6 +185,44 @@ class App(tk.Tk):
                 c['width'] = self.treeview.column(f'#{idx}', 'width')
 
             json.dump(data, f, indent=3)
+
+    def dlg_populate_tree(self, title, message, folder_count=1000):
+        def okay(_=None):
+            self.dlg_results = dlg.entry.var.get()
+            dlg.destroy()
+
+        def cancel(_=None):
+            self.dlg_results = CANCEL
+            dlg.destroy()
+
+        root = self.winfo_toplevel()
+        dlg = PopulateTreeviewDialog(root, width=320, height=150, title=title, message=message)
+        dlg.update_idletasks()
+
+        dlg.label.config(wraplength=dlg.winfo_width())
+
+        dlg.entry.var.set(folder_count)
+        dlg.entry.select_range(0, tk.END)
+        dlg.entry.icursor(tk.END)
+        dlg.entry.focus()
+        dlg.entry.focus_set()
+
+        dlg.bind('<Return>', okay)
+        dlg.bind('<KP_Enter>', okay)
+
+        dlg.button_okay.bind('<Button-1>', okay)
+        dlg.button_okay.bind('<Return>', okay)
+        dlg.button_okay.bind('<KP_Enter>', okay)
+
+        dlg.button_cancel.bind('<Button-1>', cancel)
+        dlg.button_cancel.bind('<Return>', cancel)
+        dlg.button_cancel.bind('<KP_Enter>', cancel)
+
+        # dlg.geometry(f'{dlg.geometry().split("+", 1)[0]}+{x}+{y}')
+
+        root.wait_window(dlg)
+
+        return self.dlg_results
 
 
 class Event:
@@ -236,10 +282,40 @@ class RenameDialog(DialogBase):
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
 
-        self.button_rename = ttk.Button(frame, text="Rename", width=8)
-        self.button_rename.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
+        self.button_okay = ttk.Button(frame, text="Rename", width=8)
+        self.button_okay.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
         self.button_skip = ttk.Button(frame, text="Skip", width=8)
         self.button_skip.grid(sticky=tk.NS + tk.E, row=0, column=1, padx=(5, 0))
+        self.button_cancel = ttk.Button(frame, text="Cancel", width=8)
+        self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=2, padx=(5, 0))
+
+        frame.grid(row=1, sticky=tk.EW+tk.S, padx=10, pady=(10, 20))
+
+
+class PopulateTreeviewDialog(DialogBase):
+    def __init__(self, parent, **kwargs):
+        message = kwargs.pop('message', 'No Message!')
+        super().__init__(parent, **kwargs)
+        self.container.rowconfigure(0, weight=1)
+        self.container.columnconfigure(0, weight=1)
+
+        frame = self.row0 = ttk.Frame(self.container)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+        self.label = ttk.Label(frame, text=message)
+        self.label.grid(sticky=tk.EW, pady=(0, 10), row=0, column=0)
+
+        self.entry = Entry(frame)
+        self.entry.config(textvariable=self.entry.var)
+        self.entry.grid(sticky=tk.NSEW, row=1, column=0, padx=(5, 0))
+        frame.grid(row=0, sticky=tk.NSEW, padx=10, pady=(20, 0))
+
+        frame = self.row1 = ttk.Frame(self.container)
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+
+        self.button_okay = ttk.Button(frame, text="Okay", width=8)
+        self.button_okay.grid(sticky=tk.NS + tk.E, row=0, column=0, padx=(5, 0))
         self.button_cancel = ttk.Button(frame, text="Cancel", width=8)
         self.button_cancel.grid(sticky=tk.NS+tk.E, row=0, column=2, padx=(5, 0))
 
@@ -459,7 +535,7 @@ class Treeview(ttk.Treeview):
         self.bindings_set()
         self.frame.grid(sticky=tk.NSEW)
 
-    def setup(self, data):
+    def setup(self, setup):
         def set_style():
             background = self.style.lookup("TFrame", "background")
 
@@ -543,17 +619,17 @@ class Treeview(ttk.Treeview):
         def set_rows_columns():
             ids = []
             columns = ''
-            for idx, column in enumerate(data['headings'][1:], 1):
+            for idx, column in enumerate(setup['headings'][1:], 1):
                 ids.append(f'#{idx}')
                 columns += ' '.join(column['text'].lower().split()).replace(' ', '_') + ' '
             self.field = IntEnum('Columns', columns, start=0)
-            self["columns"] = ids
 
-            for idx, cfg in enumerate(data['headings']):
+            self["columns"] = ids
+            for idx, cfg in enumerate(setup['headings']):
                 self.heading(f'#{idx}', text=cfg['text'], anchor=cfg['anchor'])
                 self.sorted_columns[f'#{idx}'] = True
 
-            for idx, cfg in enumerate(data['columns']):
+            for idx, cfg in enumerate(setup['columns']):
                 self.column(f'#{idx}', width=cfg['width'], minwidth=cfg['minwidth'], stretch=cfg['stretch'])
 
         set_style()
@@ -699,9 +775,9 @@ class Treeview(ttk.Treeview):
         dlg.bind('<Return>', rename)
         dlg.bind('<KP_Enter>', rename)
 
-        dlg.button_rename.bind('<Button-1>', rename)
-        dlg.button_rename.bind('<Return>', rename)
-        dlg.button_rename.bind('<KP_Enter>', rename)
+        dlg.button_okay.bind('<Button-1>', rename)
+        dlg.button_okay.bind('<Return>', rename)
+        dlg.button_okay.bind('<KP_Enter>', rename)
 
         dlg.button_skip.bind('<Button-1>', skip)
         dlg.button_skip.bind('<Return>', skip)
@@ -1304,7 +1380,7 @@ class Treeview(ttk.Treeview):
         wdg = None
         mode = self.columns[idx].get('mode', tk.WRITABLE)
         unique = self.columns[idx].get('unique', False)
-        _type = self.columns[idx].get('type', None)
+        _type = self.columns[idx].get('type')
 
         if _type == 'Entry':
             def tab(event):
