@@ -1,0 +1,269 @@
+{
+   "headings": [
+      {
+         "text": "Name",
+         "anchor": "w"
+      },
+      {
+         "text": "IID",
+         "anchor": "w"
+      },
+      {
+         "text": "Item",
+         "anchor": "w"
+      },
+      {
+         "text": "Open",
+         "anchor": "w"
+      },
+      {
+         "text": "Tags",
+         "anchor": "w"
+      },
+      {
+         "text": "Size",
+         "anchor": "w"
+      },
+      {
+         "text": "Last Modified",
+         "anchor": "w"
+      },
+      {
+         "text": "Data",
+         "anchor": "w"
+      }
+   ],
+   "columns": [
+      {
+         "width": 195,
+         "minwidth": 3,
+         "stretch": 0,
+         "type": "Entry",
+         "unique": true
+      },
+      {
+         "width": 70,
+         "minwidth": 3,
+         "stretch": 0
+      },
+      {
+         "width": 70,
+         "minwidth": 3,
+         "stretch": 0
+      },
+      {
+         "width": 70,
+         "minwidth": 3,
+         "stretch": 0
+      },
+      {
+         "width": 120,
+         "minwidth": 3,
+         "stretch": 0,
+         "type": "Entry"
+      },
+      {
+         "width": 80,
+         "minwidth": 3,
+         "stretch": 0
+      },
+      {
+         "width": 130,
+         "minwidth": 3,
+         "stretch": 0,
+         "type": "Combobox",
+         "values": [
+            "Value 1",
+            "Value 2",
+            "Value 3",
+            "Value 4",
+            "Value 5"
+         ]
+      },
+      {
+         "width": 258,
+         "minwidth": 3,
+         "stretch": 1,
+         "type": "Combobox",
+         "values": [
+            "Value 1",
+            "Value 2",
+            "Value 3",
+            "Value 4",
+            "Value 5"
+         ]
+      }
+   ],
+   "data": [
+      {
+         "text": "Folder 0",
+         "image": "",
+         "values": [
+            "I001",
+            "Node",
+            "True",
+            "('even',)",
+            "4 items",
+            "2020/06/15 17:35:14",
+            ""
+         ],
+         "open": 1,
+         "tags": [
+            "even"
+         ],
+         "children": [
+            {
+               "text": "photo1.png",
+               "image": "",
+               "values": [
+                  "I002",
+                  "Leaf",
+                  "",
+                  "('odd',)",
+                  "0 Kb",
+                  "2020/06/15 17:35:14",
+                  ""
+               ],
+               "open": 0,
+               "tags": [
+                  "odd"
+               ]
+            },
+            {
+               "text": "photo2.png",
+               "image": "",
+               "values": [
+                  "I003",
+                  "Leaf",
+                  "",
+                  "('even',)",
+                  "0 Kb",
+                  "2020/06/15 17:35:14",
+                  ""
+               ],
+               "open": 0,
+               "tags": [
+                  "even"
+               ]
+            },
+            {
+               "text": "photo3.png",
+               "image": "",
+               "values": [
+                  "I004",
+                  "Leaf",
+                  "",
+                  "('odd',)",
+                  "0 Kb",
+                  "Value 2",
+                  ""
+               ],
+               "open": 1,
+               "tags": [
+                  "odd"
+               ]
+            },
+            {
+               "text": "Folder 0_1",
+               "image": "",
+               "values": [
+                  "I005",
+                  "Node",
+                  "True",
+                  "('even',)",
+                  "4 items",
+                  "2020/06/15 17:35:14",
+                  ""
+               ],
+               "open": 1,
+               "tags": [
+                  "even"
+               ],
+               "children": [
+                  {
+                     "text": "photo1.png",
+                     "image": "",
+                     "values": [
+                        "I006",
+                        "Leaf",
+                        "",
+                        "('odd',)",
+                        "0 Kb",
+                        "2020/06/15 17:35:14",
+                        ""
+                     ],
+                     "open": 0,
+                     "tags": [
+                        "odd"
+                     ]
+                  },
+                  {
+                     "text": "photo25.png",
+                     "image": "",
+                     "values": [
+                        "I007",
+                        "Leaf",
+                        "True",
+                        "('even',)",
+                        "0 Kb",
+                        "2020/06/15 17:35:14",
+                        ""
+                     ],
+                     "open": 0,
+                     "tags": [
+                        "even"
+                     ]
+                  },
+                  {
+                     "text": "photo3.png",
+                     "image": "",
+                     "values": [
+                        "I008",
+                        "Leaf",
+                        "",
+                        "('odd',)",
+                        "0 Kb",
+                        "2020/06/15 17:35:14",
+                        ""
+                     ],
+                     "open": 0,
+                     "tags": [
+                        "odd"
+                     ]
+                  },
+                  {
+                     "text": "Empty Folder",
+                     "image": "",
+                     "values": [
+                        "I009",
+                        "Node",
+                        "True",
+                        "('even',)",
+                        "0 items",
+                        "2020/06/15 17:35:14",
+                        ""
+                     ],
+                     "open": 1,
+                     "tags": [
+                        "even"
+                     ]
+                  }
+               ]
+            }
+         ]
+      }
+   ],
+   "settings": [
+      [
+         "view",
+         [
+            0.0,
+            0.0
+         ]
+      ],
+      [
+         "focus",
+         "I004"
+      ]
+   ]
+}
